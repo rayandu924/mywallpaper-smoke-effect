@@ -5,559 +5,129 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Smoke Effect</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    html, body {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: transparent;
-    }
-
-    canvas {
-      display: block;
-      width: 100vw;
-      height: 100vh;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; }
+    canvas { display: block; width: 100vw; height: 100vh; }
   </style>
 </head>
 <body>
   <canvas id="smokeCanvas"></canvas>
-
   <script>
-    (function() {
-      'use strict';
+    class SmokeShaderAddon {
+      constructor() {
+        this.canvas = document.getElementById('smokeCanvas');
+        this.gl = null;
+        this.program = null;
+        this.startTime = Date.now();
+        this.isFirstRender = true;
+        this.animationId = null;
 
-      // State
-      let gl, program, canvas;
-      let animationId = null;
-      let startTime = Date.now();
-      let config = {};
-      let uniforms = {};
-      let isFirstRender = true;
+        const config = window.MyWallpaper?.config || {};
 
-      // Default config
-      const defaults = {
-        color1: '#6e0061',
-        color2: '#ad00a1',
-        color3: '#a401d6',
-        color4: '#4a0080',
-        speed: 0.8,
-        turbulence: 4,
-        density: 8,
-        intensity: 1,
-        fadeEdge: 'bottom',
-        direction: 'up',
-        octaves: 6
-      };
+        this.settings = {
+          color1: config.color1 ?? '#6e0061',
+          color2: config.color2 ?? '#ad00a1',
+          color3: config.color3 ?? '#a401d6',
+          color4: config.color4 ?? '#4a0080',
+          speed: config.speed ?? 0.8,
+          turbulence: config.turbulence ?? 4,
+          density: config.density ?? 8,
+          intensity: config.intensity ?? 1,
+          fadeEdge: config.fadeEdge ?? 'bottom',
+          direction: config.direction ?? 'up',
+          octaves: config.octaves ?? 6
+        };
 
-      // Vertex Shader (WebGL2)
-      const vertexShaderSource = `#version 300 es
-        precision mediump float;
-        const vec2 positions[6] = vec2[6](
-          vec2(-1.0, -1.0), vec2(1.0, -1.0), vec2(-1.0, 1.0),
-          vec2(-1.0, 1.0), vec2(1.0, -1.0), vec2(1.0, 1.0)
-        );
-        out vec2 vUv;
-        void main() {
-          vUv = positions[gl_VertexID] * 0.5 + 0.5;
-          gl_Position = vec4(positions[gl_VertexID], 0.0, 1.0);
-        }
-      `;
-
-      // Fragment Shader (WebGL2) - Enhanced smoke effect
-      const fragmentShaderSource = `#version 300 es
-        precision highp float;
-
-        uniform vec2 u_resolution;
-        uniform float u_time;
-        uniform float u_speed;
-        uniform float u_turbulence;
-        uniform float u_density;
-        uniform float u_intensity;
-        uniform int u_octaves;
-        uniform int u_fadeEdge;
-        uniform int u_direction;
-        uniform vec3 u_color1;
-        uniform vec3 u_color2;
-        uniform vec3 u_color3;
-        uniform vec3 u_color4;
-
-        in vec2 vUv;
-        out vec4 fragColor;
-
-        // High quality random
-        float random(vec2 st) {
-          return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
-        }
-
-        // Smooth noise with cubic interpolation
-        float noise(vec2 st) {
-          vec2 i = floor(st);
-          vec2 f = fract(st);
-
-          float a = random(i);
-          float b = random(i + vec2(1.0, 0.0));
-          float c = random(i + vec2(0.0, 1.0));
-          float d = random(i + vec2(1.0, 1.0));
-
-          // Smooth interpolation
-          vec2 u = f * f * (3.0 - 2.0 * f);
-
-          return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
-        }
-
-        // FBM with configurable octaves
-        float fbm(vec2 st, int octaves) {
-          float value = 0.0;
-          float amplitude = 0.5;
-          vec2 freq = st;
-
-          for (int i = 0; i < 8; i++) {
-            if (i >= octaves) break;
-            value += amplitude * noise(freq);
-            freq *= 2.0;
-            amplitude *= 0.5;
-          }
-          return value;
-        }
-
-        // Turbulent FBM for wispy effect
-        float turbulentFbm(vec2 st, int octaves) {
-          float value = 0.0;
-          float amplitude = 0.5;
-          vec2 freq = st;
-
-          for (int i = 0; i < 8; i++) {
-            if (i >= octaves) break;
-            value += amplitude * abs(noise(freq) * 2.0 - 1.0);
-            freq *= 2.0;
-            amplitude *= 0.5;
-          }
-          return value;
-        }
-
-        // Get movement based on direction
-        vec2 getMovement(float time) {
-          float sp = u_speed * 0.15;
-          if (u_direction == 0) return vec2(0.0, time * sp);      // up
-          if (u_direction == 1) return vec2(0.0, -time * sp);     // down
-          if (u_direction == 2) return vec2(time * sp, 0.0);      // left
-          if (u_direction == 3) return vec2(-time * sp, 0.0);     // right
-          // spiral
-          return vec2(sin(time * 0.3), cos(time * 0.3)) * time * sp * 0.5;
-        }
-
-        // Calculate fade based on edge mode
-        float getFade(vec2 uv) {
-          if (u_fadeEdge == 0) return 1.0;  // none
-          if (u_fadeEdge == 1) return smoothstep(0.0, 0.6, uv.y);  // bottom
-          if (u_fadeEdge == 2) return smoothstep(1.0, 0.4, uv.y);  // top
-          if (u_fadeEdge == 3) return smoothstep(0.0, 0.35, uv.y) * smoothstep(1.0, 0.65, uv.y);  // both
-          // radial vignette
-          vec2 center = uv - 0.5;
-          float dist = length(center);
-          return 1.0 - smoothstep(0.2, 0.7, dist);
-        }
-
-        void main() {
-          vec2 uv = vUv;
-          float time = u_time;
-
-          // Aspect ratio correction
-          float aspectRatio = u_resolution.x / u_resolution.y;
-          vec2 st = vec2(uv.x * aspectRatio, uv.y);
-
-          // Movement
-          vec2 movement = getMovement(time);
-
-          // Scale coordinates
-          vec2 smokeCoords = st * u_density + movement;
-
-          // First noise layer - base smoke shape
-          float noise1 = fbm(smokeCoords, u_octaves);
-
-          // Second noise layer with turbulence - adds detail
-          float turb = u_turbulence * 0.1;
-          float noise2 = turb * fbm(smokeCoords + noise1 * 2.0 + time * 0.1, u_octaves) - 0.3;
-
-          // Combine noises for final smoke pattern (like fire shader technique)
-          float smokePattern = fbm(vec2(noise1, noise2) * 3.0, u_octaves);
-          float smokeDetail = fbm(vec2(noise2, noise1) * 2.0, u_octaves);
-
-          // Wispy trails
-          float wisps = turbulentFbm(smokeCoords * 0.8 - movement * 0.5, u_octaves) * 0.5;
-
-          // Color mixing based on noise values
-          vec3 col1 = mix(u_color1, u_color2, smokePattern);
-          vec3 col2 = mix(u_color3, u_color4, smokeDetail);
-
-          // Final color blend
-          vec3 smokeColor = mix(col1, col2, wisps + 0.3);
-
-          // Add glow from color4
-          smokeColor += u_color4 * smokeDetail * 0.4;
-
-          // Apply intensity
-          smokeColor *= u_intensity;
-
-          // Calculate alpha for transparency effect
-          float smokeAlpha = smoothstep(0.1, 0.9, smokePattern + smokeDetail * 0.5);
-          smokeAlpha *= smoothstep(0.0, 0.3, wisps + 0.4);
-
-          // Apply edge fade
-          float fade = getFade(uv);
-          smokeAlpha *= fade;
-
-          // Ensure color doesn't exceed bounds
-          smokeColor = clamp(smokeColor, 0.0, 1.0);
-
-          fragColor = vec4(smokeColor, smokeAlpha);
-        }
-      `;
-
-      // Fallback shaders for WebGL1
-      const vertexShaderSourceV1 = `
-        attribute vec2 a_position;
-        varying vec2 vUv;
-        void main() {
-          vUv = a_position * 0.5 + 0.5;
-          gl_Position = vec4(a_position, 0.0, 1.0);
-        }
-      `;
-
-      const fragmentShaderSourceV1 = `
-        precision highp float;
-
-        uniform vec2 u_resolution;
-        uniform float u_time;
-        uniform float u_speed;
-        uniform float u_turbulence;
-        uniform float u_density;
-        uniform float u_intensity;
-        uniform int u_octaves;
-        uniform int u_fadeEdge;
-        uniform int u_direction;
-        uniform vec3 u_color1;
-        uniform vec3 u_color2;
-        uniform vec3 u_color3;
-        uniform vec3 u_color4;
-
-        varying vec2 vUv;
-
-        float random(vec2 st) {
-          return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
-        }
-
-        float noise(vec2 st) {
-          vec2 i = floor(st);
-          vec2 f = fract(st);
-          float a = random(i);
-          float b = random(i + vec2(1.0, 0.0));
-          float c = random(i + vec2(0.0, 1.0));
-          float d = random(i + vec2(1.0, 1.0));
-          vec2 u = f * f * (3.0 - 2.0 * f);
-          return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
-        }
-
-        float fbm(vec2 st) {
-          float value = 0.0;
-          float amplitude = 0.5;
-          for (int i = 0; i < 6; i++) {
-            value += amplitude * noise(st);
-            st *= 2.0;
-            amplitude *= 0.5;
-          }
-          return value;
-        }
-
-        float turbulentFbm(vec2 st) {
-          float value = 0.0;
-          float amplitude = 0.5;
-          for (int i = 0; i < 6; i++) {
-            value += amplitude * abs(noise(st) * 2.0 - 1.0);
-            st *= 2.0;
-            amplitude *= 0.5;
-          }
-          return value;
-        }
-
-        vec2 getMovement(float time) {
-          float sp = u_speed * 0.15;
-          if (u_direction == 0) return vec2(0.0, time * sp);
-          if (u_direction == 1) return vec2(0.0, -time * sp);
-          if (u_direction == 2) return vec2(time * sp, 0.0);
-          if (u_direction == 3) return vec2(-time * sp, 0.0);
-          return vec2(sin(time * 0.3), cos(time * 0.3)) * time * sp * 0.5;
-        }
-
-        float getFade(vec2 uv) {
-          if (u_fadeEdge == 0) return 1.0;
-          if (u_fadeEdge == 1) return smoothstep(0.0, 0.6, uv.y);
-          if (u_fadeEdge == 2) return smoothstep(1.0, 0.4, uv.y);
-          if (u_fadeEdge == 3) return smoothstep(0.0, 0.35, uv.y) * smoothstep(1.0, 0.65, uv.y);
-          vec2 center = uv - 0.5;
-          return 1.0 - smoothstep(0.2, 0.7, length(center));
-        }
-
-        void main() {
-          vec2 uv = vUv;
-          float time = u_time;
-          float aspectRatio = u_resolution.x / u_resolution.y;
-          vec2 st = vec2(uv.x * aspectRatio, uv.y);
-          vec2 movement = getMovement(time);
-          vec2 smokeCoords = st * u_density + movement;
-
-          float noise1 = fbm(smokeCoords);
-          float turb = u_turbulence * 0.1;
-          float noise2 = turb * fbm(smokeCoords + noise1 * 2.0 + time * 0.1) - 0.3;
-          float smokePattern = fbm(vec2(noise1, noise2) * 3.0);
-          float smokeDetail = fbm(vec2(noise2, noise1) * 2.0);
-          float wisps = turbulentFbm(smokeCoords * 0.8 - movement * 0.5) * 0.5;
-
-          vec3 col1 = mix(u_color1, u_color2, smokePattern);
-          vec3 col2 = mix(u_color3, u_color4, smokeDetail);
-          vec3 smokeColor = mix(col1, col2, wisps + 0.3);
-          smokeColor += u_color4 * smokeDetail * 0.4;
-          smokeColor *= u_intensity;
-
-          float smokeAlpha = smoothstep(0.1, 0.9, smokePattern + smokeDetail * 0.5);
-          smokeAlpha *= smoothstep(0.0, 0.3, wisps + 0.4);
-          smokeAlpha *= getFade(uv);
-
-          smokeColor = clamp(smokeColor, 0.0, 1.0);
-          gl_FragColor = vec4(smokeColor, smokeAlpha);
-        }
-      `;
-
-      // Convert hex to RGB (0-1 range)
-      function hexToRgb(hex) {
-        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-        return result ? [
-          parseInt(result[1], 16) / 255,
-          parseInt(result[2], 16) / 255,
-          parseInt(result[3], 16) / 255
-        ] : [0, 0, 0];
+        this.init();
       }
 
-      // Map string values to integers for shader
-      function fadeEdgeToInt(value) {
-        const map = { none: 0, bottom: 1, top: 2, both: 3, radial: 4 };
-        return value in map ? map[value] : 1;
+      init() {
+        this.setupWebGL();
+        this.createShaderProgram();
+        this.setupEventListeners();
+        this.render();
       }
 
-      function directionToInt(value) {
-        const map = { up: 0, down: 1, left: 2, right: 3, spiral: 4 };
-        return value in map ? map[value] : 0;
-      }
-
-      // Initialize WebGL (try WebGL2 first, fallback to WebGL1)
-      let isWebGL2 = false;
-
-      function initWebGL() {
-        canvas = document.getElementById('smokeCanvas');
-
-        // Try WebGL2 first
-        gl = canvas.getContext('webgl2', {
+      setupWebGL() {
+        this.gl = this.canvas.getContext('webgl2', {
           alpha: true,
           premultipliedAlpha: false,
-          antialias: true,
-          powerPreference: 'high-performance'
+          antialias: true
         });
 
-        if (gl) {
-          isWebGL2 = true;
-          console.log('🌫️ Smoke Effect: Using WebGL2');
-        } else {
-          // Fallback to WebGL1
-          gl = canvas.getContext('webgl', {
+        if (!this.gl) {
+          this.gl = this.canvas.getContext('webgl', {
             alpha: true,
             premultipliedAlpha: false,
             antialias: true
           });
-          console.log('🌫️ Smoke Effect: Using WebGL1 fallback');
         }
 
-        if (!gl) {
+        if (!this.gl) {
           console.error('WebGL not supported');
-          return false;
+          return;
         }
 
-        // Enable blending for transparency
-        gl.enable(gl.BLEND);
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-        gl.clearColor(0.0, 0.0, 0.0, 0.0);
+        this.gl.enable(this.gl.BLEND);
+        this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
+        this.gl.clearColor(0.0, 0.0, 0.0, 0.0);
 
-        // Create shaders based on WebGL version
-        const vertSrc = isWebGL2 ? vertexShaderSource : vertexShaderSourceV1;
-        const fragSrc = isWebGL2 ? fragmentShaderSource : fragmentShaderSourceV1;
-
-        const vertexShader = createShader(gl.VERTEX_SHADER, vertSrc);
-        const fragmentShader = createShader(gl.FRAGMENT_SHADER, fragSrc);
-
-        if (!vertexShader || !fragmentShader) return false;
-
-        // Create program
-        program = gl.createProgram();
-        gl.attachShader(program, vertexShader);
-        gl.attachShader(program, fragmentShader);
-        gl.linkProgram(program);
-
-        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-          console.error('Program link failed:', gl.getProgramInfoLog(program));
-          return false;
-        }
-
-        gl.useProgram(program);
-
-        // Setup geometry for WebGL1 (WebGL2 uses gl_VertexID)
-        if (!isWebGL2) {
-          const positions = new Float32Array([
-            -1, -1, 1, -1, -1, 1,
-            -1, 1, 1, -1, 1, 1
-          ]);
-          const buffer = gl.createBuffer();
-          gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-          gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
-
-          const positionLoc = gl.getAttribLocation(program, 'a_position');
-          gl.enableVertexAttribArray(positionLoc);
-          gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
-        }
-
-        // Cache uniform locations
-        uniforms = {
-          resolution: gl.getUniformLocation(program, 'u_resolution'),
-          time: gl.getUniformLocation(program, 'u_time'),
-          speed: gl.getUniformLocation(program, 'u_speed'),
-          turbulence: gl.getUniformLocation(program, 'u_turbulence'),
-          density: gl.getUniformLocation(program, 'u_density'),
-          intensity: gl.getUniformLocation(program, 'u_intensity'),
-          octaves: gl.getUniformLocation(program, 'u_octaves'),
-          fadeEdge: gl.getUniformLocation(program, 'u_fadeEdge'),
-          direction: gl.getUniformLocation(program, 'u_direction'),
-          color1: gl.getUniformLocation(program, 'u_color1'),
-          color2: gl.getUniformLocation(program, 'u_color2'),
-          color3: gl.getUniformLocation(program, 'u_color3'),
-          color4: gl.getUniformLocation(program, 'u_color4')
-        };
-
-        return true;
+        this.resize();
       }
 
-      function createShader(type, source) {
-        const shader = gl.createShader(type);
-        gl.shaderSource(shader, source);
-        gl.compileShader(shader);
-
-        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-          console.error('Shader compile error:', gl.getShaderInfoLog(shader));
-          gl.deleteShader(shader);
-          return null;
-        }
-
-        return shader;
-      }
-
-      function resize() {
+      resize() {
         const dpr = window.devicePixelRatio || 1;
-        const width = canvas.clientWidth;
-        const height = canvas.clientHeight;
+        const width = this.canvas.clientWidth * dpr;
+        const height = this.canvas.clientHeight * dpr;
 
-        if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
-          canvas.width = width * dpr;
-          canvas.height = height * dpr;
-
-          if (gl) {
-            gl.viewport(0, 0, canvas.width, canvas.height);
+        if (this.canvas.width !== width || this.canvas.height !== height) {
+          this.canvas.width = width;
+          this.canvas.height = height;
+          if (this.gl) {
+            this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
           }
         }
       }
 
-      function updateUniforms() {
-        if (!gl || !program) return;
+      setupEventListeners() {
+        window.addEventListener('resize', () => this.resize());
 
-        const c1 = hexToRgb(config.color1 || defaults.color1);
-        const c2 = hexToRgb(config.color2 || defaults.color2);
-        const c3 = hexToRgb(config.color3 || defaults.color3);
-        const c4 = hexToRgb(config.color4 || defaults.color4);
+        if (window.MyWallpaper) {
+          const api = window.MyWallpaper;
 
-        gl.uniform2f(uniforms.resolution, canvas.width, canvas.height);
-        gl.uniform1f(uniforms.speed, config.speed ?? defaults.speed);
-        gl.uniform1f(uniforms.turbulence, config.turbulence ?? defaults.turbulence);
-        gl.uniform1f(uniforms.density, config.density ?? defaults.density);
-        gl.uniform1f(uniforms.intensity, config.intensity ?? defaults.intensity);
-        gl.uniform1i(uniforms.octaves, config.octaves ?? defaults.octaves);
-        gl.uniform1i(uniforms.fadeEdge, fadeEdgeToInt(config.fadeEdge ?? defaults.fadeEdge));
-        gl.uniform1i(uniforms.direction, directionToInt(config.direction ?? defaults.direction));
-        gl.uniform3fv(uniforms.color1, c1);
-        gl.uniform3fv(uniforms.color2, c2);
-        gl.uniform3fv(uniforms.color3, c3);
-        gl.uniform3fv(uniforms.color4, c4);
-      }
+          api.onSettingsChange((newSettings) => {
+            Object.assign(this.settings, newSettings);
+          });
 
-      function render() {
-        if (!gl || !program) return;
+          api.onButtonClick('randomizeColorsBtn', () => {
+            this.randomizeColors();
+          });
 
-        const time = (Date.now() - startTime) / 1000;
-        gl.uniform1f(uniforms.time, time);
+          api.onEvent('viewport:resize', () => this.resize());
+          api.onPause(() => this.stop());
+          api.onResume(() => this.start());
 
-        gl.clear(gl.COLOR_BUFFER_BIT);
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-        // Signal ready after first render
-        if (isFirstRender && window.MyWallpaper) {
-          isFirstRender = false;
-          window.MyWallpaper.renderComplete();
-        }
-
-        animationId = requestAnimationFrame(render);
-      }
-
-      function start() {
-        if (animationId) return;
-        resize();
-        updateUniforms();
-        render();
-      }
-
-      function stop() {
-        if (animationId) {
-          cancelAnimationFrame(animationId);
-          animationId = null;
+          api.ready({ supportsHotReload: true });
         }
       }
 
-      function applyConfig(newConfig) {
-        config = { ...config, ...newConfig };
-        updateUniforms();
-      }
-
-      // Generate random harmonious colors using HSL
-      function randomizeColors() {
+      randomizeColors() {
         const baseHue = Math.random() * 360;
-
         const colors = {
-          color1: hslToHex(baseHue, 70 + Math.random() * 30, 20 + Math.random() * 20),
-          color2: hslToHex((baseHue + 30 + Math.random() * 30) % 360, 70 + Math.random() * 30, 30 + Math.random() * 20),
-          color3: hslToHex((baseHue + 60 + Math.random() * 60) % 360, 60 + Math.random() * 40, 40 + Math.random() * 20),
-          color4: hslToHex((baseHue + 180 + Math.random() * 60 - 30) % 360, 50 + Math.random() * 50, 25 + Math.random() * 15)
+          color1: this.hslToHex(baseHue, 70 + Math.random() * 30, 20 + Math.random() * 20),
+          color2: this.hslToHex((baseHue + 30 + Math.random() * 30) % 360, 70 + Math.random() * 30, 30 + Math.random() * 20),
+          color3: this.hslToHex((baseHue + 60 + Math.random() * 60) % 360, 60 + Math.random() * 40, 40 + Math.random() * 20),
+          color4: this.hslToHex((baseHue + 180 + Math.random() * 60 - 30) % 360, 50 + Math.random() * 50, 25 + Math.random() * 15)
         };
 
-        if (window.MyWallpaper && window.MyWallpaper.settings) {
+        if (window.MyWallpaper?.settings) {
           window.MyWallpaper.settings.setValues(colors);
         }
-
-        applyConfig(colors);
+        Object.assign(this.settings, colors);
       }
 
-      function hslToHex(h, s, l) {
-        s /= 100;
-        l /= 100;
+      hslToHex(h, s, l) {
+        s /= 100; l /= 100;
         const a = s * Math.min(l, 1 - l);
         const f = n => {
           const k = (n + h / 30) % 12;
@@ -567,55 +137,266 @@
         return `#${f(0)}${f(8)}${f(4)}`;
       }
 
-      // Initialize
-      function init() {
-        if (!initWebGL()) {
-          console.error('Failed to initialize WebGL');
+      createShaderProgram() {
+        const gl = this.gl;
+
+        const vertexShaderSource = `#version 300 es
+          precision mediump float;
+          const vec2 positions[6] = vec2[6](
+            vec2(-1.0, -1.0), vec2(1.0, -1.0), vec2(-1.0, 1.0),
+            vec2(-1.0, 1.0), vec2(1.0, -1.0), vec2(1.0, 1.0)
+          );
+          out vec2 uv;
+          void main() {
+            uv = positions[gl_VertexID];
+            gl_Position = vec4(positions[gl_VertexID], 0.0, 1.0);
+          }
+        `;
+
+        const fragmentShaderSource = `#version 300 es
+          precision highp float;
+
+          uniform float time;
+          uniform vec2 resolution;
+          uniform vec3 color1;
+          uniform vec3 color2;
+          uniform vec3 color3;
+          uniform vec3 color4;
+          uniform float intensity;
+          uniform float speed;
+          uniform float density;
+          uniform float turbulence;
+          uniform int fadeEdge;
+          uniform int direction;
+
+          in vec2 uv;
+          out vec4 fragColor;
+
+          // Générateur de nombres pseudo-aléatoires
+          float random(vec2 st) {
+            return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
+          }
+
+          // Fonction de bruit
+          float noise(vec2 st) {
+            vec2 i = floor(st);
+            vec2 f = fract(st);
+
+            float a = random(i);
+            float b = random(i + vec2(1.0, 0.0));
+            float c = random(i + vec2(0.0, 1.0));
+            float d = random(i + vec2(1.0, 1.0));
+
+            vec2 u = f * f * (3.0 - 2.0 * f);
+
+            return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+          }
+
+          // FBM - Fractional Brownian Motion
+          #define OCTAVES 6
+          float fbm(vec2 st) {
+            float value = 0.0;
+            float amplitude = 0.5;
+            vec2 freq = st;
+
+            for (int i = 0; i < OCTAVES; i++) {
+              value += amplitude * noise(freq);
+              freq *= 2.0;
+              amplitude *= 0.5;
+            }
+            return value;
+          }
+
+          // Direction du mouvement
+          vec2 getMovement(float t) {
+            float sp = speed * 0.3;
+            if (direction == 0) return vec2(0.0, t * sp);       // up
+            if (direction == 1) return vec2(0.0, -t * sp);      // down
+            if (direction == 2) return vec2(t * sp, 0.0);       // left
+            if (direction == 3) return vec2(-t * sp, 0.0);      // right
+            return vec2(sin(t * 0.5) * sp, cos(t * 0.5) * sp) * t * 0.3; // spiral
+          }
+
+          // Edge fade
+          float getFade(vec2 st) {
+            float y = (st.y + 1.0) * 0.5; // normalize to 0-1
+            if (fadeEdge == 0) return 1.0;
+            if (fadeEdge == 1) return smoothstep(0.0, 0.5, y);
+            if (fadeEdge == 2) return smoothstep(1.0, 0.5, y);
+            if (fadeEdge == 3) return smoothstep(0.0, 0.3, y) * smoothstep(1.0, 0.7, y);
+            // radial
+            float dist = length(st);
+            return 1.0 - smoothstep(0.3, 1.0, dist);
+          }
+
+          void main() {
+            vec2 st = uv;
+
+            // Aspect ratio correction
+            float aspectRatio = resolution.x / resolution.y;
+            st.x *= aspectRatio;
+
+            // Mouvement basé sur la direction
+            vec2 movement = getMovement(time);
+
+            // Coordonnées de la fumée
+            vec2 smokeCoords = vec2(st.x, st.y - movement.y) * density + movement;
+
+            // Gradient de base
+            float gradient = mix(st.y * 0.3, st.y * 0.5, fbm(smokeCoords));
+
+            // Première couche de bruit pour la forme de la fumée
+            float noise1 = fbm(smokeCoords);
+
+            // Seconde couche avec turbulence
+            float noise2 = turbulence * 0.25 * fbm(smokeCoords + noise1 + time * 0.1) - 0.3;
+
+            // Combinaison des bruits pour créer l'effet de fumée
+            float finalNoise = turbulence * 0.25 * fbm(vec2(noise1, noise2));
+            float smokeIntensity = fbm(vec2(noise2, noise1));
+
+            // Mélange des couleurs basé sur l'intensité
+            vec3 smokeColor1 = mix(color1, color2, smokeIntensity);
+            vec3 smokeColor2 = mix(color3, color4, finalNoise);
+            vec3 finalColor = mix(smokeColor1, smokeColor2, noise1);
+
+            // Appliquer l'intensité
+            finalColor *= intensity;
+
+            // Alpha dynamique pour transparence
+            float smokeAlpha = smoothstep(0.0, 1.0, (smokeIntensity - gradient + 0.5));
+
+            // Appliquer le fade
+            smokeAlpha *= getFade(uv);
+
+            fragColor = vec4(finalColor, smokeAlpha);
+          }
+        `;
+
+        const vertexShader = this.compileShader(vertexShaderSource, gl.VERTEX_SHADER);
+        const fragmentShader = this.compileShader(fragmentShaderSource, gl.FRAGMENT_SHADER);
+
+        if (!vertexShader || !fragmentShader) return;
+
+        this.program = gl.createProgram();
+        gl.attachShader(this.program, vertexShader);
+        gl.attachShader(this.program, fragmentShader);
+        gl.linkProgram(this.program);
+
+        if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) {
+          console.error('Program link failed:', gl.getProgramInfoLog(this.program));
           return;
         }
 
-        resize();
+        gl.useProgram(this.program);
 
-        window.addEventListener('resize', () => {
-          resize();
-          updateUniforms();
-        });
+        this.uniforms = {
+          time: gl.getUniformLocation(this.program, 'time'),
+          resolution: gl.getUniformLocation(this.program, 'resolution'),
+          color1: gl.getUniformLocation(this.program, 'color1'),
+          color2: gl.getUniformLocation(this.program, 'color2'),
+          color3: gl.getUniformLocation(this.program, 'color3'),
+          color4: gl.getUniformLocation(this.program, 'color4'),
+          intensity: gl.getUniformLocation(this.program, 'intensity'),
+          speed: gl.getUniformLocation(this.program, 'speed'),
+          density: gl.getUniformLocation(this.program, 'density'),
+          turbulence: gl.getUniformLocation(this.program, 'turbulence'),
+          fadeEdge: gl.getUniformLocation(this.program, 'fadeEdge'),
+          direction: gl.getUniformLocation(this.program, 'direction')
+        };
+      }
 
-        // Check for MyWallpaper API
-        if (window.MyWallpaper) {
-          const api = window.MyWallpaper;
-          config = { ...defaults, ...api.config };
+      compileShader(source, type) {
+        const shader = this.gl.createShader(type);
+        this.gl.shaderSource(shader, source);
+        this.gl.compileShader(shader);
 
-          api.onSettingsChange((newConfig) => {
-            applyConfig(newConfig);
-          });
-
-          api.onButtonClick('randomizeColorsBtn', () => {
-            randomizeColors();
-          });
-
-          api.onEvent('viewport:resize', () => {
-            resize();
-            updateUniforms();
-          });
-
-          api.onPause(() => stop());
-          api.onResume(() => start());
-
-          api.ready({ supportsHotReload: true });
-        } else {
-          config = { ...defaults };
+        if (!this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS)) {
+          console.error('Shader compile error:', this.gl.getShaderInfoLog(shader));
+          this.gl.deleteShader(shader);
+          return null;
         }
 
-        start();
+        return shader;
       }
 
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-      } else {
-        init();
+      hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? [
+          parseInt(result[1], 16) / 255,
+          parseInt(result[2], 16) / 255,
+          parseInt(result[3], 16) / 255
+        ] : [1, 1, 1];
       }
-    })();
+
+      fadeEdgeToInt(value) {
+        const map = { none: 0, bottom: 1, top: 2, both: 3, radial: 4 };
+        return value in map ? map[value] : 1;
+      }
+
+      directionToInt(value) {
+        const map = { up: 0, down: 1, left: 2, right: 3, spiral: 4 };
+        return value in map ? map[value] : 0;
+      }
+
+      render = () => {
+        if (!this.gl || !this.program) {
+          this.animationId = requestAnimationFrame(this.render);
+          return;
+        }
+
+        const gl = this.gl;
+        const currentTime = (Date.now() - this.startTime) / 1000;
+
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        gl.uniform1f(this.uniforms.time, currentTime);
+        gl.uniform2fv(this.uniforms.resolution, [this.canvas.width, this.canvas.height]);
+
+        const c1 = this.hexToRgb(this.settings.color1);
+        const c2 = this.hexToRgb(this.settings.color2);
+        const c3 = this.hexToRgb(this.settings.color3);
+        const c4 = this.hexToRgb(this.settings.color4);
+
+        gl.uniform3fv(this.uniforms.color1, c1);
+        gl.uniform3fv(this.uniforms.color2, c2);
+        gl.uniform3fv(this.uniforms.color3, c3);
+        gl.uniform3fv(this.uniforms.color4, c4);
+
+        gl.uniform1f(this.uniforms.intensity, this.settings.intensity);
+        gl.uniform1f(this.uniforms.speed, this.settings.speed);
+        gl.uniform1f(this.uniforms.density, this.settings.density);
+        gl.uniform1f(this.uniforms.turbulence, this.settings.turbulence);
+        gl.uniform1i(this.uniforms.fadeEdge, this.fadeEdgeToInt(this.settings.fadeEdge));
+        gl.uniform1i(this.uniforms.direction, this.directionToInt(this.settings.direction));
+
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        if (this.isFirstRender && window.MyWallpaper) {
+          this.isFirstRender = false;
+          window.MyWallpaper.renderComplete();
+        }
+
+        this.animationId = requestAnimationFrame(this.render);
+      }
+
+      start() {
+        if (!this.animationId) {
+          this.render();
+        }
+      }
+
+      stop() {
+        if (this.animationId) {
+          cancelAnimationFrame(this.animationId);
+          this.animationId = null;
+        }
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      window.smokeShader = new SmokeShaderAddon();
+    });
   </script>
 </body>
 </html>
