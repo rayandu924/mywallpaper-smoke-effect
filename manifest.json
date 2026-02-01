@@ -51,6 +51,10 @@
       "description": "Ethereal glow effect",
       "default": "#4a0080"
     },
+    "randomizeColorsBtn": {
+      "type": "button",
+      "buttonLabel": "🎲 Randomize Colors"
+    },
 
     "animationSection": {
       "type": "section",
@@ -131,15 +135,6 @@
       "max": 8,
       "step": 1,
       "default": 6
-    },
-
-    "presetsSection": {
-      "type": "section",
-      "label": "🎲 Random"
-    },
-    "randomizeColorsBtn": {
-      "type": "button",
-      "buttonLabel": "Randomize Colors"
     }
   }
 }
