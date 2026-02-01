@@ -420,6 +420,40 @@
         updateUniforms();
       }
 
+      // Generate random harmonious colors using HSL
+      function randomizeColors() {
+        // Pick a random base hue
+        const baseHue = Math.random() * 360;
+
+        // Generate 4 colors with harmonic relationships
+        const colors = {
+          color1: hslToHex(baseHue, 70 + Math.random() * 30, 20 + Math.random() * 20),
+          color2: hslToHex((baseHue + 30 + Math.random() * 30) % 360, 70 + Math.random() * 30, 30 + Math.random() * 20),
+          color3: hslToHex((baseHue + 60 + Math.random() * 60) % 360, 60 + Math.random() * 40, 40 + Math.random() * 20),
+          color4: hslToHex((baseHue + 180 + Math.random() * 60 - 30) % 360, 50 + Math.random() * 50, 25 + Math.random() * 15)
+        };
+
+        // Update config and notify MyWallpaper to update UI
+        if (window.MyWallpaper && window.MyWallpaper.settings) {
+          window.MyWallpaper.settings.setValues(colors);
+        }
+
+        applyConfig(colors);
+      }
+
+      // Convert HSL to Hex
+      function hslToHex(h, s, l) {
+        s /= 100;
+        l /= 100;
+        const a = s * Math.min(l, 1 - l);
+        const f = n => {
+          const k = (n + h / 30) % 12;
+          const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+          return Math.round(255 * color).toString(16).padStart(2, '0');
+        };
+        return `#${f(0)}${f(8)}${f(4)}`;
+      }
+
       // Initialize
       function init() {
         if (!initWebGL()) {
@@ -447,9 +481,9 @@
             applyConfig(newConfig);
           });
 
-          // Handle reset button
-          api.onButtonClick('resetBtn', () => {
-            applyConfig(defaults);
+          // Handle randomize colors button
+          api.onButtonClick('randomizeColorsBtn', () => {
+            randomizeColors();
           });
 
           // Handle viewport resize

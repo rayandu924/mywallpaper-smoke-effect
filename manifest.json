@@ -135,11 +135,11 @@
 
     "presetsSection": {
       "type": "section",
-      "label": "🔧 Presets"
+      "label": "🎲 Random"
     },
-    "resetBtn": {
+    "randomizeColorsBtn": {
       "type": "button",
-      "buttonLabel": "Reset to Defaults"
+      "buttonLabel": "Randomize Colors"
     }
   }
 }
