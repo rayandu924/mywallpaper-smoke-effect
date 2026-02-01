@@ -103,15 +103,28 @@
     },
     "fadeEdge": {
       "type": "select",
-      "label": "Smoke Origin",
-      "description": "Where the smoke comes from",
+      "label": "Edge Fade",
+      "description": "Where smoke fades out",
       "default": "bottom",
       "options": [
-        { "value": "none", "label": "Everywhere" },
-        { "value": "bottom", "label": "From Bottom" },
-        { "value": "top", "label": "From Top" },
-        { "value": "both", "label": "Center Band" },
-        { "value": "radial", "label": "Center Radial" }
+        { "value": "none", "label": "None" },
+        { "value": "bottom", "label": "Fade Bottom" },
+        { "value": "top", "label": "Fade Top" },
+        { "value": "both", "label": "Fade Both" },
+        { "value": "radial", "label": "Radial Vignette" }
+      ]
+    },
+    "direction": {
+      "type": "select",
+      "label": "Flow Direction",
+      "description": "Primary movement direction",
+      "default": "up",
+      "options": [
+        { "value": "up", "label": "↑ Upward" },
+        { "value": "down", "label": "↓ Downward" },
+        { "value": "left", "label": "← Leftward" },
+        { "value": "right", "label": "→ Rightward" },
+        { "value": "spiral", "label": "🌀 Spiral" }
       ]
     }
   }
