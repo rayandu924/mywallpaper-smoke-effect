@@ -5,11 +5,13 @@ class SmokeShaderAddon {
         this.gl = null;
         this.program = null;
         this.startTime = Date.now();
-        this.layerId = window.MYWALLPAPER_LAYER_ID;
         this.isFirstRender = true;
+        this.animationId = null;
 
-        // ✅ Read pre-injected config from MyWallpaper (avoids race condition)
-        const config = window.MYWALLPAPER_CONFIG || {};
+        // ✅ Read pre-injected config from MyWallpaper SDK 2.13.0
+        // Uses double underscores: __MYWALLPAPER_LAYER_ID__ and __MYWALLPAPER_INITIAL_CONFIG__
+        this.layerId = window.__MYWALLPAPER_LAYER_ID__ || '';
+        const config = window.__MYWALLPAPER_INITIAL_CONFIG__ || {};
 
         // Default settings merged with pre-injected config
         this.settings = {
@@ -38,10 +40,18 @@ class SmokeShaderAddon {
     }
 
     setupEventListeners() {
-        // Listen for settings updates from MyWallpaper
+        // Listen for settings updates from MyWallpaper via postMessage
         window.addEventListener('message', (event) => {
-            if (event.data?.type === 'SETTINGS_UPDATE' && event.data?.settings) {
-                this.updateSettings(event.data.settings);
+            const data = event.data;
+            if (!data) return;
+
+            // Handle settings updates (SDK 2.13.0 format)
+            if (data.type === 'SETTINGS_UPDATE' && data.settings) {
+                this.updateSettings(data.settings);
+            }
+            // Also handle SETTINGS_PREVIEW for live updates
+            if (data.type === 'SETTINGS_PREVIEW' && data.settings) {
+                this.updateSettings(data.settings);
             }
         });
 
@@ -64,7 +74,16 @@ class SmokeShaderAddon {
         });
 
         if (!this.gl) {
-            console.error('WebGL2 non supporté');
+            // Fallback to WebGL1
+            this.gl = this.canvas.getContext('webgl', {
+                alpha: true,
+                premultipliedAlpha: false,
+                antialias: true
+            });
+        }
+
+        if (!this.gl) {
+            console.error('WebGL not supported');
             return;
         }
 
@@ -93,6 +112,9 @@ class SmokeShaderAddon {
     }
 
     createShaderProgram() {
+        const gl = this.gl;
+        if (!gl) return;
+
         const vertexShaderSource = `#version 300 es
             precision mediump float;
             const vec2 positions[6] = vec2[6](
@@ -124,12 +146,10 @@ class SmokeShaderAddon {
             in vec2 uv;
             out vec4 fragColor;
 
-            // Générateur de nombres pseudo-aléatoires
             float random(vec2 st) {
                 return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
             }
 
-            // Fonction de bruit basée sur Morgan McGuire
             float noise(vec2 st) {
                 vec2 i = floor(st);
                 vec2 f = fract(st);
@@ -144,7 +164,6 @@ class SmokeShaderAddon {
                 return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
             }
 
-            // Bruit fractal (FBM)
             #define OCTAVES 5
             float fbm(vec2 st) {
                 float value = 0.0;
@@ -159,7 +178,6 @@ class SmokeShaderAddon {
                 return value;
             }
 
-            // Edge fade
             float getFade(vec2 st) {
                 float y = (st.y + 1.0) * 0.5;
                 if (fadeEdge == 0) return 1.0;
@@ -176,7 +194,6 @@ class SmokeShaderAddon {
                 float aspectRatio = resolution.x / resolution.y;
                 st.x *= aspectRatio;
 
-                // Direction du mouvement
                 vec2 movement = vec2(0.0);
                 if (direction == 0) movement = vec2(0.0, time * speed);
                 else if (direction == 1) movement = vec2(0.0, -time * speed);
@@ -194,50 +211,51 @@ class SmokeShaderAddon {
                 float finalNoise = turbulence * fbm(vec2(noise1, noise2));
                 float smokeIntensity = fbm(vec2(noise2, noise1));
 
-                // Mélange des 4 couleurs
                 vec3 baseColor = mix(color1, color2, smokeIntensity);
                 vec3 accentColor = mix(color3, color4, finalNoise);
                 vec3 finalColor = mix(baseColor, accentColor, noise1 * 0.5 + 0.25);
 
                 finalColor *= intensity;
 
-                float smokeAlpha = smoothstep(0.0, 1.0, (smokeIntensity - gradient + 0.3) * 1.0);
+                float smokeAlpha = smoothstep(0.0, 1.0, (smokeIntensity - gradient + 0.3));
                 smokeAlpha *= getFade(uv);
 
                 fragColor = vec4(finalColor, smokeAlpha);
             }`;
 
-        const vertexShader = this.compileShader(vertexShaderSource, this.gl.VERTEX_SHADER);
-        const fragmentShader = this.compileShader(fragmentShaderSource, this.gl.FRAGMENT_SHADER);
+        const vertexShader = this.compileShader(vertexShaderSource, gl.VERTEX_SHADER);
+        const fragmentShader = this.compileShader(fragmentShaderSource, gl.FRAGMENT_SHADER);
 
         if (!vertexShader || !fragmentShader) return;
 
-        this.program = this.gl.createProgram();
-        this.gl.attachShader(this.program, vertexShader);
-        this.gl.attachShader(this.program, fragmentShader);
-        this.gl.linkProgram(this.program);
+        this.program = gl.createProgram();
+        gl.attachShader(this.program, vertexShader);
+        gl.attachShader(this.program, fragmentShader);
+        gl.linkProgram(this.program);
 
-        if (!this.gl.getProgramParameter(this.program, this.gl.LINK_STATUS)) {
-            console.error('Erreur de liaison du programme:', this.gl.getProgramInfoLog(this.program));
+        if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) {
+            console.error('Program link failed:', gl.getProgramInfoLog(this.program));
             return;
         }
 
-        this.gl.useProgram(this.program);
+        gl.useProgram(this.program);
 
         this.uniforms = {
-            time: this.gl.getUniformLocation(this.program, 'time'),
-            resolution: this.gl.getUniformLocation(this.program, 'resolution'),
-            color1: this.gl.getUniformLocation(this.program, 'color1'),
-            color2: this.gl.getUniformLocation(this.program, 'color2'),
-            color3: this.gl.getUniformLocation(this.program, 'color3'),
-            color4: this.gl.getUniformLocation(this.program, 'color4'),
-            intensity: this.gl.getUniformLocation(this.program, 'intensity'),
-            speed: this.gl.getUniformLocation(this.program, 'speed'),
-            scale: this.gl.getUniformLocation(this.program, 'scale'),
-            turbulence: this.gl.getUniformLocation(this.program, 'turbulence'),
-            fadeEdge: this.gl.getUniformLocation(this.program, 'fadeEdge'),
-            direction: this.gl.getUniformLocation(this.program, 'direction')
+            time: gl.getUniformLocation(this.program, 'time'),
+            resolution: gl.getUniformLocation(this.program, 'resolution'),
+            color1: gl.getUniformLocation(this.program, 'color1'),
+            color2: gl.getUniformLocation(this.program, 'color2'),
+            color3: gl.getUniformLocation(this.program, 'color3'),
+            color4: gl.getUniformLocation(this.program, 'color4'),
+            intensity: gl.getUniformLocation(this.program, 'intensity'),
+            speed: gl.getUniformLocation(this.program, 'speed'),
+            scale: gl.getUniformLocation(this.program, 'scale'),
+            turbulence: gl.getUniformLocation(this.program, 'turbulence'),
+            fadeEdge: gl.getUniformLocation(this.program, 'fadeEdge'),
+            direction: gl.getUniformLocation(this.program, 'direction')
         };
+
+        console.log('🌫️ Shader program created successfully');
     }
 
     compileShader(source, type) {
@@ -246,7 +264,7 @@ class SmokeShaderAddon {
         this.gl.compileShader(shader);
 
         if (!this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS)) {
-            console.error('Erreur de compilation du shader:', this.gl.getShaderInfoLog(shader));
+            console.error('Shader compile error:', this.gl.getShaderInfoLog(shader));
             this.gl.deleteShader(shader);
             return null;
         }
@@ -275,57 +293,72 @@ class SmokeShaderAddon {
 
     render = () => {
         if (!this.gl || !this.program) {
-            requestAnimationFrame(this.render);
+            this.animationId = requestAnimationFrame(this.render);
             return;
         }
 
+        const gl = this.gl;
         const currentTime = (Date.now() - this.startTime) / 1000;
 
-        this.gl.uniform1f(this.uniforms.time, currentTime);
-        this.gl.uniform2fv(this.uniforms.resolution, [this.canvas.width, this.canvas.height]);
+        gl.clear(gl.COLOR_BUFFER_BIT);
 
-        this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+        gl.uniform1f(this.uniforms.time, currentTime);
+        gl.uniform2fv(this.uniforms.resolution, [this.canvas.width, this.canvas.height]);
 
         const c1 = this.hexToRgb(this.settings.color1);
         const c2 = this.hexToRgb(this.settings.color2);
         const c3 = this.hexToRgb(this.settings.color3);
         const c4 = this.hexToRgb(this.settings.color4);
 
-        this.gl.uniform3fv(this.uniforms.color1, c1);
-        this.gl.uniform3fv(this.uniforms.color2, c2);
-        this.gl.uniform3fv(this.uniforms.color3, c3);
-        this.gl.uniform3fv(this.uniforms.color4, c4);
+        gl.uniform3fv(this.uniforms.color1, c1);
+        gl.uniform3fv(this.uniforms.color2, c2);
+        gl.uniform3fv(this.uniforms.color3, c3);
+        gl.uniform3fv(this.uniforms.color4, c4);
 
-        this.gl.uniform1f(this.uniforms.intensity, this.settings.intensity);
-        this.gl.uniform1f(this.uniforms.speed, this.settings.speed);
-        this.gl.uniform1f(this.uniforms.scale, this.settings.density);
-        this.gl.uniform1f(this.uniforms.turbulence, this.settings.turbulence);
-        this.gl.uniform1i(this.uniforms.fadeEdge, this.fadeEdgeToInt(this.settings.fadeEdge));
-        this.gl.uniform1i(this.uniforms.direction, this.directionToInt(this.settings.direction));
+        gl.uniform1f(this.uniforms.intensity, this.settings.intensity);
+        gl.uniform1f(this.uniforms.speed, this.settings.speed);
+        gl.uniform1f(this.uniforms.scale, this.settings.density);
+        gl.uniform1f(this.uniforms.turbulence, this.settings.turbulence);
+        gl.uniform1i(this.uniforms.fadeEdge, this.fadeEdgeToInt(this.settings.fadeEdge));
+        gl.uniform1i(this.uniforms.direction, this.directionToInt(this.settings.direction));
 
-        this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-        // ✅ Signal ADDON_READY after first frame rendered
-        if (this.isFirstRender && this.layerId) {
+        // Signal ready after first frame
+        if (this.isFirstRender) {
             this.isFirstRender = false;
-            window.parent.postMessage({
-                type: 'ADDON_READY',
-                layerId: this.layerId
-            }, '*');
-            console.log('✅ Smoke shader ready signal sent');
+
+            // Signal via postMessage for older API
+            if (this.layerId) {
+                window.parent.postMessage({
+                    type: 'ADDON_READY',
+                    layerId: this.layerId
+                }, '*');
+            }
+
+            // Signal via MyWallpaper SDK API if available
+            if (window.MyWallpaper) {
+                window.MyWallpaper.ready({ supportsHotReload: true });
+                console.log('✅ Smoke shader ready (SDK API)');
+            } else {
+                console.log('✅ Smoke shader ready (postMessage)');
+            }
         }
 
-        requestAnimationFrame(this.render);
+        this.animationId = requestAnimationFrame(this.render);
     }
 
     destroy() {
-        if (this.program) {
+        if (this.animationId) {
+            cancelAnimationFrame(this.animationId);
+        }
+        if (this.program && this.gl) {
             this.gl.deleteProgram(this.program);
         }
     }
 }
 
-// Initialisation quand le DOM est chargé
+// Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     window.smokeShader = new SmokeShaderAddon();
 });
