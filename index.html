@@ -260,12 +260,12 @@
       // Map string values to integers for shader
       function fadeEdgeToInt(value) {
         const map = { none: 0, bottom: 1, top: 2, both: 3, radial: 4 };
-        return map[value] || 1;
+        return value in map ? map[value] : 1;
       }
 
       function directionToInt(value) {
         const map = { up: 0, down: 1, left: 2, right: 3, spiral: 4 };
-        return map[value] || 0;
+        return value in map ? map[value] : 0;
       }
 
       // Initialize WebGL
