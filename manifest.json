@@ -15,8 +15,8 @@
   },
 
   "defaultLayout": {
-    "xPercent": 50,
-    "yPercent": 50,
+    "xPercent": 0,
+    "yPercent": 0,
     "widthPercent": 100,
     "heightPercent": 100,
     "rotation": 0
