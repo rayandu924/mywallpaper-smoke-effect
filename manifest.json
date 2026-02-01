@@ -64,28 +64,28 @@
       "type": "range",
       "label": "Flow Speed",
       "description": "How fast the smoke moves",
-      "min": 0.1,
-      "max": 3,
-      "step": 0.1,
-      "default": 0.8
+      "min": 0.05,
+      "max": 1,
+      "step": 0.05,
+      "default": 0.2
     },
     "turbulence": {
       "type": "range",
       "label": "Turbulence",
       "description": "Chaos and swirl intensity",
-      "min": 1,
-      "max": 10,
-      "step": 0.5,
-      "default": 4
+      "min": 0.1,
+      "max": 2,
+      "step": 0.1,
+      "default": 0.9
     },
     "density": {
       "type": "range",
-      "label": "Smoke Density",
-      "description": "How packed the smoke appears",
+      "label": "Smoke Scale",
+      "description": "Size of smoke patterns",
       "min": 1,
       "max": 15,
       "step": 0.5,
-      "default": 8
+      "default": 7
     },
 
     "effectsSection": {
@@ -99,7 +99,7 @@
       "min": 0.1,
       "max": 2,
       "step": 0.1,
-      "default": 1
+      "default": 0.9
     },
     "fadeEdge": {
       "type": "select",
@@ -126,15 +126,6 @@
         { "value": "right", "label": "→ Rightward" },
         { "value": "spiral", "label": "🌀 Spiral" }
       ]
-    },
-    "octaves": {
-      "type": "range",
-      "label": "Detail Level",
-      "description": "Noise complexity (higher = more detailed)",
-      "min": 3,
-      "max": 8,
-      "step": 1,
-      "default": 6
     }
   }
 }

@@ -29,10 +29,10 @@
           color2: config.color2 ?? '#ad00a1',
           color3: config.color3 ?? '#a401d6',
           color4: config.color4 ?? '#4a0080',
-          speed: config.speed ?? 0.8,
-          turbulence: config.turbulence ?? 4,
-          density: config.density ?? 8,
-          intensity: config.intensity ?? 1,
+          speed: config.speed ?? 0.2,
+          turbulence: config.turbulence ?? 0.9,
+          density: config.density ?? 7.0,
+          intensity: config.intensity ?? 0.9,
           fadeEdge: config.fadeEdge ?? 'bottom',
           direction: config.direction ?? 'up',
           octaves: config.octaves ?? 6
@@ -153,6 +153,7 @@
           }
         `;
 
+        // Fragment shader - copié du fire shader avec adaptations pour smoke
         const fragmentShaderSource = `#version 300 es
           precision highp float;
 
@@ -164,8 +165,9 @@
           uniform vec3 color4;
           uniform float intensity;
           uniform float speed;
-          uniform float density;
+          uniform float scale;
           uniform float turbulence;
+          uniform float height;
           uniform int fadeEdge;
           uniform int direction;
 
@@ -177,7 +179,7 @@
             return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
           }
 
-          // Fonction de bruit
+          // Fonction de bruit basée sur Morgan McGuire
           float noise(vec2 st) {
             vec2 i = floor(st);
             vec2 f = fract(st);
@@ -192,39 +194,28 @@
             return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
           }
 
-          // FBM - Fractional Brownian Motion
-          #define OCTAVES 6
+          // Bruit fractal (FBM)
+          #define OCTAVES 5
           float fbm(vec2 st) {
             float value = 0.0;
-            float amplitude = 0.5;
+            float amplitude = 0.4;
             vec2 freq = st;
 
             for (int i = 0; i < OCTAVES; i++) {
               value += amplitude * noise(freq);
               freq *= 2.0;
-              amplitude *= 0.5;
+              amplitude *= 0.4;
             }
             return value;
           }
 
-          // Direction du mouvement
-          vec2 getMovement(float t) {
-            float sp = speed * 0.3;
-            if (direction == 0) return vec2(0.0, t * sp);       // up
-            if (direction == 1) return vec2(0.0, -t * sp);      // down
-            if (direction == 2) return vec2(t * sp, 0.0);       // left
-            if (direction == 3) return vec2(-t * sp, 0.0);      // right
-            return vec2(sin(t * 0.5) * sp, cos(t * 0.5) * sp) * t * 0.3; // spiral
-          }
-
           // Edge fade
           float getFade(vec2 st) {
-            float y = (st.y + 1.0) * 0.5; // normalize to 0-1
+            float y = (st.y + 1.0) * 0.5;
             if (fadeEdge == 0) return 1.0;
             if (fadeEdge == 1) return smoothstep(0.0, 0.5, y);
             if (fadeEdge == 2) return smoothstep(1.0, 0.5, y);
             if (fadeEdge == 3) return smoothstep(0.0, 0.3, y) * smoothstep(1.0, 0.7, y);
-            // radial
             float dist = length(st);
             return 1.0 - smoothstep(0.3, 1.0, dist);
           }
@@ -232,39 +223,44 @@
           void main() {
             vec2 st = uv;
 
-            // Aspect ratio correction
+            // Correction d'aspect ratio
             float aspectRatio = resolution.x / resolution.y;
             st.x *= aspectRatio;
 
-            // Mouvement basé sur la direction
-            vec2 movement = getMovement(time);
+            // Direction du mouvement
+            vec2 movement = vec2(0.0);
+            if (direction == 0) movement = vec2(0.0, time * speed);       // up
+            else if (direction == 1) movement = vec2(0.0, -time * speed); // down
+            else if (direction == 2) movement = vec2(time * speed, 0.0);  // left
+            else if (direction == 3) movement = vec2(-time * speed, 0.0); // right
+            else movement = vec2(sin(time * 0.5) * speed, cos(time * 0.5) * speed) * time * 0.3; // spiral
 
-            // Coordonnées de la fumée
-            vec2 smokeCoords = vec2(st.x, st.y - movement.y) * density + movement;
+            // Coordonnées de la fumée avec mouvement
+            vec2 smokeCoords = vec2(st.x, st.y - movement.y) * scale + movement;
 
-            // Gradient de base
-            float gradient = mix(st.y * 0.3, st.y * 0.5, fbm(smokeCoords));
+            // Gradient de base normalisé
+            float gradient = mix(st.y * 0.3, st.y * 0.7, fbm(smokeCoords));
 
-            // Première couche de bruit pour la forme de la fumée
+            // Première couche de bruit pour la forme
             float noise1 = fbm(smokeCoords);
 
-            // Seconde couche avec turbulence
-            float noise2 = turbulence * 0.25 * fbm(smokeCoords + noise1 + time * 0.1) - 0.3;
+            // Seconde couche avec plus de turbulence
+            float noise2 = turbulence * fbm(smokeCoords + noise1 + time) - 0.5;
 
-            // Combinaison des bruits pour créer l'effet de fumée
-            float finalNoise = turbulence * 0.25 * fbm(vec2(noise1, noise2));
+            // Combinaison des bruits pour créer l'effet
+            float finalNoise = turbulence * fbm(vec2(noise1, noise2));
             float smokeIntensity = fbm(vec2(noise2, noise1));
 
-            // Mélange des couleurs basé sur l'intensité
-            vec3 smokeColor1 = mix(color1, color2, smokeIntensity);
-            vec3 smokeColor2 = mix(color3, color4, finalNoise);
-            vec3 finalColor = mix(smokeColor1, smokeColor2, noise1);
+            // Mélange des couleurs - utilise les 4 couleurs
+            vec3 baseColor = mix(color1, color2, smokeIntensity);
+            vec3 accentColor = mix(color3, color4, finalNoise);
+            vec3 finalColor = mix(baseColor, accentColor, noise1 * 0.5 + 0.25);
 
-            // Appliquer l'intensité
+            // Couleur finale avec intensité
             finalColor *= intensity;
 
-            // Alpha dynamique pour transparence
-            float smokeAlpha = smoothstep(0.0, 1.0, (smokeIntensity - gradient + 0.5));
+            // Alpha dynamique pour transparence réelle
+            float smokeAlpha = smoothstep(0.0, 1.0, (smokeIntensity - gradient + 0.3) * height);
 
             // Appliquer le fade
             smokeAlpha *= getFade(uv);
@@ -299,8 +295,9 @@
           color4: gl.getUniformLocation(this.program, 'color4'),
           intensity: gl.getUniformLocation(this.program, 'intensity'),
           speed: gl.getUniformLocation(this.program, 'speed'),
-          density: gl.getUniformLocation(this.program, 'density'),
+          scale: gl.getUniformLocation(this.program, 'scale'),
           turbulence: gl.getUniformLocation(this.program, 'turbulence'),
+          height: gl.getUniformLocation(this.program, 'height'),
           fadeEdge: gl.getUniformLocation(this.program, 'fadeEdge'),
           direction: gl.getUniformLocation(this.program, 'direction')
         };
@@ -321,7 +318,7 @@
       }
 
       hexToRgb(hex) {
-        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})?$/i.exec(hex);
         return result ? [
           parseInt(result[1], 16) / 255,
           parseInt(result[2], 16) / 255,
@@ -353,20 +350,16 @@
         gl.uniform1f(this.uniforms.time, currentTime);
         gl.uniform2fv(this.uniforms.resolution, [this.canvas.width, this.canvas.height]);
 
-        const c1 = this.hexToRgb(this.settings.color1);
-        const c2 = this.hexToRgb(this.settings.color2);
-        const c3 = this.hexToRgb(this.settings.color3);
-        const c4 = this.hexToRgb(this.settings.color4);
-
-        gl.uniform3fv(this.uniforms.color1, c1);
-        gl.uniform3fv(this.uniforms.color2, c2);
-        gl.uniform3fv(this.uniforms.color3, c3);
-        gl.uniform3fv(this.uniforms.color4, c4);
+        gl.uniform3fv(this.uniforms.color1, this.hexToRgb(this.settings.color1));
+        gl.uniform3fv(this.uniforms.color2, this.hexToRgb(this.settings.color2));
+        gl.uniform3fv(this.uniforms.color3, this.hexToRgb(this.settings.color3));
+        gl.uniform3fv(this.uniforms.color4, this.hexToRgb(this.settings.color4));
 
         gl.uniform1f(this.uniforms.intensity, this.settings.intensity);
         gl.uniform1f(this.uniforms.speed, this.settings.speed);
-        gl.uniform1f(this.uniforms.density, this.settings.density);
+        gl.uniform1f(this.uniforms.scale, this.settings.density);
         gl.uniform1f(this.uniforms.turbulence, this.settings.turbulence);
+        gl.uniform1f(this.uniforms.height, 1.0);
         gl.uniform1i(this.uniforms.fadeEdge, this.fadeEdgeToInt(this.settings.fadeEdge));
         gl.uniform1i(this.uniforms.direction, this.directionToInt(this.settings.direction));
 
