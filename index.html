@@ -196,16 +196,18 @@
       float glow = smoke3 * 0.5;
       color += u_color4 * glow * 0.8;
 
-      // Subtle color shift based on position
-      float shift = cos(1.6 * gl_FragCoord.y / u_resolution.y + time * 0.2);
-      color *= shift * 0.3 + 0.7;
-
       // Apply intensity
       color *= u_intensity;
 
-      // Apply edge fade
-      float fade = getFade(uv);
-      color *= fade;
+      // Apply edge fade (only if not "none")
+      if (u_fadeEdge != 0) {
+        float fade = getFade(uv);
+        color *= fade;
+
+        // Subtle color shift only when fade is active
+        float shift = cos(1.6 * gl_FragCoord.y / u_resolution.y + time * 0.2);
+        color *= shift * 0.15 + 0.85;
+      }
 
       // Subtle film grain for organic feel
       float grain = hash(uv + fract(time)) * 0.03;
