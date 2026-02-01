@@ -1,0 +1,145 @@
+{
+  "name": "Smoke Effect",
+  "version": "1.0.0",
+  "sdkVersion": "2.7.0",
+  "description": "Mesmerizing animated smoke effect with customizable colors and fluid dynamics. Premium WebGL shader with Fractal Brownian Motion.",
+  "author": "MyWallpaper Community",
+  "type": "widget",
+  "categories": ["effects", "animations", "backgrounds"],
+  "license": "MIT",
+  "repository": "https://github.com/rayandu924/mywallpaper-smoke-effect",
+
+  "capabilities": {
+    "hotReload": true,
+    "systemEvents": ["viewport:resize"]
+  },
+
+  "defaultLayout": {
+    "xPercent": 50,
+    "yPercent": 50,
+    "widthPercent": 100,
+    "heightPercent": 100,
+    "rotation": 0
+  },
+
+  "settings": {
+    "colorsSection": {
+      "type": "section",
+      "label": "🎨 Colors"
+    },
+    "color1": {
+      "type": "color",
+      "label": "Primary Color",
+      "description": "Main smoke color - dominates the effect",
+      "default": "#6e0061"
+    },
+    "color2": {
+      "type": "color",
+      "label": "Secondary Color",
+      "description": "Blends with primary for depth",
+      "default": "#ad00a1"
+    },
+    "color3": {
+      "type": "color",
+      "label": "Accent Color",
+      "description": "Highlights and wisps",
+      "default": "#a401d6"
+    },
+    "color4": {
+      "type": "color",
+      "label": "Glow Color",
+      "description": "Ethereal glow effect",
+      "default": "#4a0080"
+    },
+
+    "animationSection": {
+      "type": "section",
+      "label": "⚡ Animation"
+    },
+    "speed": {
+      "type": "range",
+      "label": "Flow Speed",
+      "description": "How fast the smoke moves",
+      "min": 0.1,
+      "max": 3,
+      "step": 0.1,
+      "default": 0.8
+    },
+    "turbulence": {
+      "type": "range",
+      "label": "Turbulence",
+      "description": "Chaos and swirl intensity",
+      "min": 1,
+      "max": 10,
+      "step": 0.5,
+      "default": 4
+    },
+    "density": {
+      "type": "range",
+      "label": "Smoke Density",
+      "description": "How packed the smoke appears",
+      "min": 1,
+      "max": 15,
+      "step": 0.5,
+      "default": 8
+    },
+
+    "effectsSection": {
+      "type": "section",
+      "label": "✨ Effects"
+    },
+    "intensity": {
+      "type": "range",
+      "label": "Color Intensity",
+      "description": "Brightness and vibrancy",
+      "min": 0.1,
+      "max": 2,
+      "step": 0.1,
+      "default": 1
+    },
+    "fadeEdge": {
+      "type": "select",
+      "label": "Edge Fade",
+      "description": "Where smoke fades out",
+      "default": "bottom",
+      "options": [
+        { "value": "none", "label": "None" },
+        { "value": "bottom", "label": "Fade Bottom" },
+        { "value": "top", "label": "Fade Top" },
+        { "value": "both", "label": "Fade Both" },
+        { "value": "radial", "label": "Radial Vignette" }
+      ]
+    },
+    "direction": {
+      "type": "select",
+      "label": "Flow Direction",
+      "description": "Primary movement direction",
+      "default": "up",
+      "options": [
+        { "value": "up", "label": "↑ Upward" },
+        { "value": "down", "label": "↓ Downward" },
+        { "value": "left", "label": "← Leftward" },
+        { "value": "right", "label": "→ Rightward" },
+        { "value": "spiral", "label": "🌀 Spiral" }
+      ]
+    },
+    "octaves": {
+      "type": "range",
+      "label": "Detail Level",
+      "description": "Noise complexity (higher = more detailed)",
+      "min": 3,
+      "max": 8,
+      "step": 1,
+      "default": 6
+    },
+
+    "presetsSection": {
+      "type": "section",
+      "label": "🔧 Presets"
+    },
+    "resetBtn": {
+      "type": "button",
+      "buttonLabel": "Reset to Defaults"
+    }
+  }
+}
