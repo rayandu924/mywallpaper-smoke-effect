@@ -1,7 +1,7 @@
 {
   "name": "Smoke Effect",
-  "version": "1.0.0",
-  "sdkVersion": "2.13.0",
+  "version": "1.1.0",
+  "sdkVersion": "2.17.1",
   "description": "Mesmerizing animated smoke effect with customizable colors and fluid dynamics. Premium WebGL shader with Fractal Brownian Motion.",
   "author": "MyWallpaper Community",
   "type": "widget",
@@ -22,6 +22,10 @@
     "rotation": 0
   },
 
+  "ui": {
+    "pointerEvents": "none"
+  },
+
   "settings": {
     "colorsSection": {
       "type": "section",
@@ -30,74 +34,119 @@
     "color1": {
       "type": "color",
       "label": "Primary Color",
-      "description": "Main smoke color - dominates the effect",
       "default": "#6e0061"
     },
     "color2": {
       "type": "color",
       "label": "Secondary Color",
-      "description": "Blends with primary for depth",
       "default": "#ad00a1"
-    },
-    "color3": {
-      "type": "color",
-      "label": "Accent Color",
-      "description": "Highlights and wisps",
-      "default": "#a401d6"
-    },
-    "color4": {
-      "type": "color",
-      "label": "Glow Color",
-      "description": "Ethereal glow effect",
-      "default": "#4a0080"
     },
     "randomizeColorsBtn": {
       "type": "button",
       "buttonLabel": "🎲 Randomize Colors"
     },
 
-    "animationSection": {
+    "motionSection": {
       "type": "section",
-      "label": "⚡ Animation"
+      "label": "💨 Motion"
     },
     "speed": {
       "type": "range",
-      "label": "Flow Speed",
+      "label": "Speed",
       "description": "How fast the smoke moves",
-      "min": 0.05,
-      "max": 1,
-      "step": 0.05,
-      "default": 0.2
+      "min": 0.01,
+      "max": 3,
+      "step": 0.01,
+      "default": 0.01
     },
-    "turbulence": {
+    "windAngle": {
       "type": "range",
-      "label": "Turbulence",
-      "description": "Chaos and swirl intensity",
+      "label": "Wind Direction",
+      "description": "Direction the wind blows (0° = up, 90° = right)",
+      "min": 0,
+      "max": 360,
+      "step": 1,
+      "default": 0
+    },
+
+    "appearanceSection": {
+      "type": "section",
+      "label": "🌫️ Appearance"
+    },
+    "scale": {
+      "type": "range",
+      "label": "Scale",
+      "description": "Size of smoke patterns",
       "min": 0.1,
-      "max": 2,
+      "max": 30,
       "step": 0.1,
-      "default": 0.9
+      "default": 2.2
     },
     "density": {
       "type": "range",
-      "label": "Smoke Scale",
-      "description": "Size of smoke patterns",
-      "min": 1,
-      "max": 15,
-      "step": 0.5,
-      "default": 7
+      "label": "Density",
+      "description": "Opacity/thickness of the smoke",
+      "min": 0.1,
+      "max": 3.0,
+      "step": 0.05,
+      "default": 1.35
+    },
+    "softness": {
+      "type": "range",
+      "label": "Softness",
+      "description": "Edge smoothness (0 = sharp, high = soft)",
+      "min": 0,
+      "max": 5.0,
+      "step": 0.1,
+      "default": 2.7
+    },
+    "detail": {
+      "type": "range",
+      "label": "Detail",
+      "description": "Fine details level (low = blobby, high = detailed)",
+      "min": 0,
+      "max": 3.0,
+      "step": 0.1,
+      "default": 2.0
+    },
+    "warp": {
+      "type": "range",
+      "label": "Turbulence",
+      "description": "How much layers interact (0 = calm, high = chaotic)",
+      "min": 0,
+      "max": 5.0,
+      "step": 0.1,
+      "default": 2.0
+    },
+    "coverage": {
+      "type": "range",
+      "label": "Coverage",
+      "description": "Base smoke amount before dissipation",
+      "min": 0,
+      "max": 2.0,
+      "step": 0.05,
+      "default": 1.0
     },
 
-    "effectsSection": {
+    "sourceSection": {
       "type": "section",
-      "label": "✨ Effects"
+      "label": "📍 Source"
     },
-    "intensity": {
+    "sourceAngle": {
       "type": "range",
-      "label": "Color Intensity",
-      "description": "Brightness and vibrancy",
+      "label": "Origin Angle",
+      "description": "Where smoke comes from (0° = bottom, 90° = left)",
+      "min": 0,
+      "max": 360,
+      "step": 1,
+      "default": 0
+    },
+    "reach": {
+      "type": "range",
+      "label": "Height",
+      "description": "How high/far the smoke extends",
       "min": 0.1,
-      "max": 2,
+      "max": 3.0,
       "step": 0.1,
       "default": 0.9
     },
