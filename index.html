@@ -250,6 +250,11 @@
             // Alpha: fade controls gradient sharpness, height controls extension
             float smokeAlpha = smoothstep(0.0, fade, (smokeIntensity - gradient + 0.3) * height);
 
+            // Dithering: break Mach bands with screen-space noise (±0.5/255)
+            float dither = (hash(gl_FragCoord.xy + fract(time)) - 0.5) / 255.0;
+            smokeColor += dither;
+            smokeAlpha += dither;
+
             fragColor = vec4(smokeColor, smokeAlpha * opacity);
           }
         `;
