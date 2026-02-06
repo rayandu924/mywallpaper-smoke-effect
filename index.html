@@ -27,20 +27,31 @@
         this.settings = {
           color1: config.color1 ?? '#6e0061',
           color2: config.color2 ?? '#ad00a1',
-          color3: config.color3 ?? '#a401d6',
-          color4: config.color4 ?? '#4a0080',
-          speed: config.speed ?? 0.2,
-          turbulence: config.turbulence ?? 0.9,
-          density: config.density ?? 7.0,
-          intensity: config.intensity ?? 0.9,
-          smokeEdge: config.smokeEdge ?? 'bottom',
-          smokeHeight: config.smokeHeight ?? 0.6
+          speed: config.speed ?? 0.01,
+          windAngle: config.windAngle ?? 0,
+          scale: config.scale ?? 2.2,
+          density: config.density ?? 1.35,
+          softness: config.softness ?? 2.7,
+          detail: config.detail ?? 2.0,
+          warp: config.warp ?? 2.0,
+          coverage: config.coverage ?? 1.0,
+          sourceAngle: config.sourceAngle ?? 0,
+          reach: config.reach ?? 0.8
         };
+
+        // Bind methods for event listener cleanup
+        this.handleResize = this.resize.bind(this);
 
         this.init();
       }
 
       init() {
+        const rect = this.canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) {
+          requestAnimationFrame(() => this.init());
+          return;
+        }
+
         this.setupWebGL();
         this.createShaderProgram();
         this.setupEventListeners();
@@ -89,7 +100,7 @@
       }
 
       setupEventListeners() {
-        window.addEventListener('resize', () => this.resize());
+        window.addEventListener('resize', this.handleResize);
 
         if (window.MyWallpaper) {
           const api = window.MyWallpaper;
@@ -105,8 +116,12 @@
           api.onEvent('viewport:resize', () => this.resize());
           api.onPause(() => this.stop());
           api.onResume(() => this.start());
+          api.onUnmount(() => this.dispose());
 
-          api.ready({ supportsHotReload: true });
+          api.ready({
+            capabilities: ['hot-reload'],
+            subscribedEvents: ['viewport:resize']
+          });
         }
       }
 
@@ -114,9 +129,7 @@
         const baseHue = Math.random() * 360;
         const colors = {
           color1: this.hslToHex(baseHue, 70 + Math.random() * 30, 20 + Math.random() * 20),
-          color2: this.hslToHex((baseHue + 30 + Math.random() * 30) % 360, 70 + Math.random() * 30, 30 + Math.random() * 20),
-          color3: this.hslToHex((baseHue + 60 + Math.random() * 60) % 360, 60 + Math.random() * 40, 40 + Math.random() * 20),
-          color4: this.hslToHex((baseHue + 180 + Math.random() * 60 - 30) % 360, 50 + Math.random() * 50, 25 + Math.random() * 15)
+          color2: this.hslToHex((baseHue + 30 + Math.random() * 60) % 360, 60 + Math.random() * 40, 35 + Math.random() * 25)
         };
 
         if (window.MyWallpaper?.settings) {
@@ -159,39 +172,47 @@
           uniform vec2 resolution;
           uniform vec3 color1;
           uniform vec3 color2;
-          uniform vec3 color3;
-          uniform vec3 color4;
-          uniform float intensity;
           uniform float speed;
+          uniform float windAngle;
           uniform float scale;
-          uniform float turbulence;
-          uniform int smokeEdge;
-          uniform float smokeHeight;
+          uniform float density;
+          uniform float softness;
+          uniform float detail;
+          uniform float warp;
+          uniform float coverage;
+          uniform float sourceAngle;
+          uniform float reach;
 
           in vec2 uv;
           out vec4 fragColor;
 
-          float random(vec2 st) {
-            return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
+          // Hash function for noise
+          float hash(vec2 p) {
+            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
           }
 
-          float noise(vec2 st) {
-            vec2 i = floor(st);
-            vec2 f = fract(st);
-            float a = random(i);
-            float b = random(i + vec2(1.0, 0.0));
-            float c = random(i + vec2(0.0, 1.0));
-            float d = random(i + vec2(1.0, 1.0));
+          // Smooth noise
+          float noise(vec2 p) {
+            vec2 i = floor(p);
+            vec2 f = fract(p);
             vec2 u = f * f * (3.0 - 2.0 * f);
-            return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+
+            float a = hash(i);
+            float b = hash(i + vec2(1.0, 0.0));
+            float c = hash(i + vec2(0.0, 1.0));
+            float d = hash(i + vec2(1.0, 1.0));
+
+            return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
           }
 
-          #define OCTAVES 5
-          float fbm(vec2 st) {
+          // FBM with variable octaves
+          float fbm(vec2 p, int octaves) {
             float value = 0.0;
             float amplitude = 0.4;
-            vec2 freq = st;
-            for (int i = 0; i < OCTAVES; i++) {
+            vec2 freq = p;
+
+            for (int i = 0; i < 6; i++) {
+              if (i >= octaves) break;
               value += amplitude * noise(freq);
               freq *= 2.0;
               amplitude *= 0.4;
@@ -200,61 +221,77 @@
           }
 
           void main() {
-            vec2 st = uv;
+            vec2 pos = uv;
+            float nx = (uv.x + 1.0) * 0.5;
+            float ny = (uv.y + 1.0) * 0.5;
+
+            // Aspect ratio correction
             float aspectRatio = resolution.x / resolution.y;
-            st.x *= aspectRatio;
+            pos.x *= aspectRatio;
 
-            // Coordonnées pour le bruit
-            vec2 smokeCoords = st * scale;
+            // === WIND DIRECTION ===
+            float windRad = radians(windAngle);
+            vec2 windDir = vec2(sin(windRad), cos(windRad));
 
-            // Première couche de bruit
-            float noise1 = fbm(smokeCoords);
+            // Smoke coordinates - wind applied BEFORE scale
+            vec2 smokeCoords = (pos - windDir * time * speed * 0.5) * scale;
 
-            // Seconde couche avec animation (speed fonctionne ici)
-            float noise2 = turbulence * fbm(smokeCoords + noise1 + time * speed * 5.0) - 0.5;
+            // === SOURCE DISTANCE ===
+            float srcRad = radians(sourceAngle);
+            vec2 srcDir = vec2(-sin(srcRad), -cos(srcRad));
 
-            // Combinaison des bruits
-            float finalNoise = turbulence * fbm(vec2(noise1, noise2));
-            float smokeIntensity = fbm(vec2(noise2, noise1));
-
-            // Mélange des 4 couleurs
-            vec3 baseColor = mix(color1, color2, smokeIntensity);
-            vec3 accentColor = mix(color3, color4, finalNoise);
-            vec3 finalColor = mix(baseColor, accentColor, noise1 * 0.5 + 0.25);
-            finalColor *= intensity;
-
-            // Alpha de base depuis le bruit
-            float smokeAlpha = smokeIntensity;
-
-            // Position normalisée (0 à 1)
-            float y = (uv.y + 1.0) * 0.5;  // 0 = bas, 1 = haut
-            float x = (uv.x + 1.0) * 0.5;  // 0 = gauche, 1 = droite
-
-            // Appliquer le masque selon l'origine de la fumée
-            float reach = smokeHeight;
-
-            if (smokeEdge == 0) {
-              // all - fumée partout
-              // pas de masque
-            } else if (smokeEdge == 1) {
-              // bottom - fumée part du bas
-              smokeAlpha *= smoothstep(0.0, reach, y);
-            } else if (smokeEdge == 2) {
-              // top - fumée part du haut
-              smokeAlpha *= smoothstep(1.0, 1.0 - reach, y);
-            } else if (smokeEdge == 3) {
-              // left - fumée part de la gauche
-              smokeAlpha *= smoothstep(0.0, reach, x);
-            } else if (smokeEdge == 4) {
-              // right - fumée part de la droite
-              smokeAlpha *= smoothstep(1.0, 1.0 - reach, x);
-            } else if (smokeEdge == 5) {
-              // center - fumée part du centre
-              float dist = length(uv);
-              smokeAlpha *= 1.0 - smoothstep(0.0, reach * 1.5, dist);
+            float dist = 0.0;
+            if (srcDir.y < 0.0) {
+              dist += abs(srcDir.y) * ny;
+            } else {
+              dist += abs(srcDir.y) * (1.0 - ny);
+            }
+            if (srcDir.x < 0.0) {
+              dist += abs(srcDir.x) * nx;
+            } else {
+              dist += abs(srcDir.x) * (1.0 - nx);
             }
 
-            fragColor = vec4(finalColor, smokeAlpha);
+            // Normalized distance (0 at source, 1 at reach)
+            float normalizedDist = clamp(dist / reach, 0.0, 1.0);
+
+            // Smooth fade that starts early and reaches 0 at the limit
+            // Fade starts at 50% of reach, fully gone at 100%
+            float reachFade = 1.0 - smoothstep(0.4, 1.0, normalizedDist);
+
+            // Natural gradient for organic dissipation
+            float gradient = normalizedDist * (0.5 + fbm(smokeCoords, 3) * 0.4);
+
+            // === MULTI-LAYER NOISE SYSTEM ===
+            int octaves = 2 + int(detail * 4.0);
+
+            // Layer 1: Base smoke shape
+            float noise1 = fbm(smokeCoords, octaves);
+
+            // Layer 2: Turbulent movement (feeds from layer 1)
+            float noise2 = warp * fbm(smokeCoords + noise1 + time * 0.5, octaves) - 0.5;
+
+            // Layer 3: Cross-feed for organic movement
+            float finalNoise = warp * fbm(vec2(noise1, noise2), 3);
+
+            // Smoke intensity: layers feeding into each other
+            float smokeIntensity = fbm(vec2(noise2, noise1), octaves);
+
+            // === COVERAGE + NATURAL DISSIPATION ===
+            float smokeValue = smokeIntensity - gradient + coverage;
+
+            // === SOFTNESS (edge width) ===
+            // softness 0 = sharp edges, softness 1 = very soft/blurry edges
+            float edgeSharpness = 0.1 + softness * 0.5;
+            float smokeAlpha = smoothstep(0.0, edgeSharpness, smokeValue * reach);
+
+            // === COLORS ===
+            vec3 smokeColor = mix(color2, color1, smokeIntensity);
+
+            // Apply reach fade for smooth disappearance
+            float finalAlpha = smokeAlpha * density * reachFade;
+
+            fragColor = vec4(smokeColor, finalAlpha);
           }
         `;
 
@@ -280,14 +317,16 @@
           resolution: gl.getUniformLocation(this.program, 'resolution'),
           color1: gl.getUniformLocation(this.program, 'color1'),
           color2: gl.getUniformLocation(this.program, 'color2'),
-          color3: gl.getUniformLocation(this.program, 'color3'),
-          color4: gl.getUniformLocation(this.program, 'color4'),
-          intensity: gl.getUniformLocation(this.program, 'intensity'),
           speed: gl.getUniformLocation(this.program, 'speed'),
+          windAngle: gl.getUniformLocation(this.program, 'windAngle'),
           scale: gl.getUniformLocation(this.program, 'scale'),
-          turbulence: gl.getUniformLocation(this.program, 'turbulence'),
-          smokeEdge: gl.getUniformLocation(this.program, 'smokeEdge'),
-          smokeHeight: gl.getUniformLocation(this.program, 'smokeHeight')
+          density: gl.getUniformLocation(this.program, 'density'),
+          softness: gl.getUniformLocation(this.program, 'softness'),
+          detail: gl.getUniformLocation(this.program, 'detail'),
+          warp: gl.getUniformLocation(this.program, 'warp'),
+          coverage: gl.getUniformLocation(this.program, 'coverage'),
+          sourceAngle: gl.getUniformLocation(this.program, 'sourceAngle'),
+          reach: gl.getUniformLocation(this.program, 'reach')
         };
       }
 
@@ -314,11 +353,6 @@
         ] : [1, 1, 1];
       }
 
-      smokeEdgeToInt(value) {
-        const map = { all: 0, bottom: 1, top: 2, left: 3, right: 4, center: 5 };
-        return value in map ? map[value] : 1;
-      }
-
       render = () => {
         if (!this.gl || !this.program) {
           this.animationId = requestAnimationFrame(this.render);
@@ -335,15 +369,17 @@
 
         gl.uniform3fv(this.uniforms.color1, this.hexToRgb(this.settings.color1));
         gl.uniform3fv(this.uniforms.color2, this.hexToRgb(this.settings.color2));
-        gl.uniform3fv(this.uniforms.color3, this.hexToRgb(this.settings.color3));
-        gl.uniform3fv(this.uniforms.color4, this.hexToRgb(this.settings.color4));
 
-        gl.uniform1f(this.uniforms.intensity, this.settings.intensity);
         gl.uniform1f(this.uniforms.speed, this.settings.speed);
-        gl.uniform1f(this.uniforms.scale, this.settings.density);
-        gl.uniform1f(this.uniforms.turbulence, this.settings.turbulence);
-        gl.uniform1i(this.uniforms.smokeEdge, this.smokeEdgeToInt(this.settings.smokeEdge));
-        gl.uniform1f(this.uniforms.smokeHeight, this.settings.smokeHeight);
+        gl.uniform1f(this.uniforms.windAngle, this.settings.windAngle);
+        gl.uniform1f(this.uniforms.scale, this.settings.scale);
+        gl.uniform1f(this.uniforms.density, this.settings.density);
+        gl.uniform1f(this.uniforms.softness, this.settings.softness);
+        gl.uniform1f(this.uniforms.detail, this.settings.detail);
+        gl.uniform1f(this.uniforms.warp, this.settings.warp);
+        gl.uniform1f(this.uniforms.coverage, this.settings.coverage);
+        gl.uniform1f(this.uniforms.sourceAngle, this.settings.sourceAngle);
+        gl.uniform1f(this.uniforms.reach, this.settings.reach);
 
         gl.drawArrays(gl.TRIANGLES, 0, 6);
 
@@ -367,11 +403,24 @@
           this.animationId = null;
         }
       }
+
+      dispose() {
+        this.stop();
+        if (this.gl && this.program) {
+          this.gl.deleteProgram(this.program);
+          this.program = null;
+        }
+        window.removeEventListener('resize', this.handleResize);
+      }
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
+    if (document.readyState === 'complete') {
       window.smokeShader = new SmokeShaderAddon();
-    });
+    } else {
+      window.addEventListener('load', () => {
+        window.smokeShader = new SmokeShaderAddon();
+      });
+    }
   </script>
 </body>
 </html>

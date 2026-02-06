@@ -1,6 +1,6 @@
 {
   "name": "Smoke Effect",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "sdkVersion": "2.17.1",
   "description": "Mesmerizing animated smoke effect with customizable colors and fluid dynamics. Premium WebGL shader with Fractal Brownian Motion.",
   "author": "MyWallpaper Community",
@@ -149,29 +149,6 @@
       "max": 3.0,
       "step": 0.1,
       "default": 0.9
-    },
-    "smokeEdge": {
-      "type": "select",
-      "label": "Smoke Origin",
-      "description": "Which edge the smoke starts from",
-      "default": "bottom",
-      "options": [
-        { "value": "all", "label": "Everywhere" },
-        { "value": "bottom", "label": "Bottom Edge" },
-        { "value": "top", "label": "Top Edge" },
-        { "value": "left", "label": "Left Edge" },
-        { "value": "right", "label": "Right Edge" },
-        { "value": "center", "label": "Center" }
-      ]
-    },
-    "smokeHeight": {
-      "type": "range",
-      "label": "Smoke Reach",
-      "description": "How far the smoke extends from the edge",
-      "min": 0.2,
-      "max": 1,
-      "step": 0.1,
-      "default": 0.6
     }
   }
 }
