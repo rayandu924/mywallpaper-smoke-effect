@@ -19,7 +19,8 @@ Animated smoke effect with customizable colors and fluid dynamics. Pure WebGL2 s
 | Setting | Range | Default | Description |
 |---------|-------|---------|-------------|
 | Speed | 0 - 1 | 0.2 | How fast the smoke moves |
-| Direction | 0 - 360 | 0 | Unified direction (0=up, 90=right, 180=down, 270=left) |
+| Origin | 0 - 360 | 0 | Where smoke comes from (0=bottom, 90=left, 180=top, 270=right) |
+| Direction | 0 - 360 | 0 | Where smoke travels toward (0=up, 90=right, 180=down, 270=left) |
 
 ### Appearance
 | Setting | Range | Default | Description |
@@ -28,6 +29,7 @@ Animated smoke effect with customizable colors and fluid dynamics. Pure WebGL2 s
 | Opacity | 0 - 1 | 1.0 | Overall transparency |
 | Detail | 0 - 3 | 0.75 | Noise complexity (0=blobs, 3=fine details) |
 | Turbulence | 0 - 2 | 0.9 | Chaos and distortion |
+| Fade | 0.1 - 2 | 1.0 | Gradient sharpness (low = hard edge, high = soft fade) |
 | Height | 0.3 - 3 | 1.0 | How far the smoke extends |
 
 ## Installation
