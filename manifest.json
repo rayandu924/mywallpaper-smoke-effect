@@ -1,6 +1,6 @@
 {
   "name": "Smoke Effect",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "sdkVersion": "2.17.1",
   "description": "Mesmerizing animated smoke effect with customizable colors and fluid dynamics. Premium WebGL shader with Fractal Brownian Motion.",
   "author": "MyWallpaper Community",
@@ -55,14 +55,14 @@
       "label": "Speed",
       "description": "How fast the smoke moves",
       "min": 0.0,
-      "max": 3,
-      "step": 0.05,
+      "max": 1.0,
+      "step": 0.01,
       "default": 0.2
     },
-    "windAngle": {
+    "direction": {
       "type": "range",
-      "label": "Wind Direction",
-      "description": "Direction the wind blows (0° = up, 90° = right)",
+      "label": "Direction",
+      "description": "Smoke direction (0° = up, 90° = right, 180° = down, 270° = left)",
       "min": 0,
       "max": 360,
       "step": 1,
@@ -73,87 +73,46 @@
       "type": "section",
       "label": "🌫️ Appearance"
     },
-    "intensity": {
-      "type": "range",
-      "label": "Intensity",
-      "description": "Color brightness multiplier",
-      "min": 0.0,
-      "max": 2.0,
-      "step": 0.1,
-      "default": 0.9
-    },
     "scale": {
       "type": "range",
       "label": "Scale",
-      "description": "Size of smoke patterns",
-      "min": 0.1,
-      "max": 30,
-      "step": 0.5,
-      "default": 7.0
-    },
-    "density": {
-      "type": "range",
-      "label": "Density",
-      "description": "Opacity/thickness of the smoke",
-      "min": 0.0,
-      "max": 3.0,
-      "step": 0.05,
-      "default": 1.0
-    },
-    "softness": {
-      "type": "range",
-      "label": "Softness",
-      "description": "Edge smoothness (0 = sharp, high = soft)",
-      "min": 0,
+      "description": "Size of smoke patterns (bigger = larger patterns)",
+      "min": 0.2,
       "max": 5.0,
       "step": 0.1,
-      "default": 1.8
+      "default": 1.0
+    },
+    "opacity": {
+      "type": "range",
+      "label": "Opacity",
+      "description": "Overall smoke transparency",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.01,
+      "default": 1.0
     },
     "detail": {
       "type": "range",
       "label": "Detail",
-      "description": "Fine details level (low = blobby, high = detailed)",
+      "description": "Noise complexity (0 = smooth blobs, 3 = fine details)",
       "min": 0,
       "max": 3.0,
       "step": 0.05,
       "default": 0.75
     },
-    "warp": {
+    "turbulence": {
       "type": "range",
       "label": "Turbulence",
-      "description": "How much layers interact (0 = calm, high = chaotic)",
-      "min": 0,
-      "max": 5.0,
-      "step": 0.1,
-      "default": 0.9
-    },
-    "coverage": {
-      "type": "range",
-      "label": "Coverage",
-      "description": "Base smoke amount before dissipation",
+      "description": "Chaos and distortion (0 = calm, 2 = chaotic)",
       "min": 0,
       "max": 2.0,
       "step": 0.05,
-      "default": 0.3
+      "default": 0.9
     },
-
-    "sourceSection": {
-      "type": "section",
-      "label": "📍 Source"
-    },
-    "sourceAngle": {
-      "type": "range",
-      "label": "Origin Angle",
-      "description": "Where smoke comes from (0° = bottom, 90° = left)",
-      "min": 0,
-      "max": 360,
-      "step": 1,
-      "default": 0
-    },
-    "reach": {
+    "height": {
       "type": "range",
       "label": "Height",
-      "description": "How high/far the smoke extends",
+      "description": "How far the smoke extends",
       "min": 0.3,
       "max": 3.0,
       "step": 0.1,

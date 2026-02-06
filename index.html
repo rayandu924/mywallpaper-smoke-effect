@@ -18,7 +18,7 @@
         this.canvas = document.getElementById('smokeCanvas');
         this.gl = null;
         this.program = null;
-        this.startTime = Date.now();
+        this.startTime = performance.now();
         this.isFirstRender = true;
         this.animationId = null;
 
@@ -27,20 +27,15 @@
         this.settings = {
           color1: config.color1 ?? '#FF6B35',
           color2: config.color2 ?? '#FF0000',
-          intensity: config.intensity ?? 0.9,
           speed: config.speed ?? 0.2,
-          windAngle: config.windAngle ?? 0,
-          scale: config.scale ?? 7.0,
-          density: config.density ?? 1.0,
-          softness: config.softness ?? 1.8,
+          direction: config.direction ?? 0,
+          scale: config.scale ?? 1.0,
+          opacity: config.opacity ?? 1.0,
           detail: config.detail ?? 0.75,
-          warp: config.warp ?? 0.9,
-          coverage: config.coverage ?? 0.3,
-          sourceAngle: config.sourceAngle ?? 0,
-          reach: config.reach ?? 1.0
+          turbulence: config.turbulence ?? 0.9,
+          height: config.height ?? 1.0
         };
 
-        // Bind methods for event listener cleanup
         this.handleResize = this.resize.bind(this);
 
         this.init();
@@ -67,15 +62,7 @@
         });
 
         if (!this.gl) {
-          this.gl = this.canvas.getContext('webgl', {
-            alpha: true,
-            premultipliedAlpha: false,
-            antialias: true
-          });
-        }
-
-        if (!this.gl) {
-          console.error('WebGL not supported');
+          console.error('WebGL2 not supported');
           return;
         }
 
@@ -173,27 +160,21 @@
           uniform vec2 resolution;
           uniform vec3 color1;
           uniform vec3 color2;
-          uniform float intensity;
           uniform float speed;
-          uniform float windAngle;
+          uniform float direction;
           uniform float scale;
-          uniform float density;
-          uniform float softness;
+          uniform float opacity;
           uniform float detail;
-          uniform float warp;
-          uniform float coverage;
-          uniform float sourceAngle;
-          uniform float reach;
+          uniform float turbulence;
+          uniform float height;
 
           in vec2 uv;
           out vec4 fragColor;
 
-          // Hash function for noise
           float hash(vec2 p) {
             return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453123);
           }
 
-          // Smooth noise
           float noise(vec2 p) {
             vec2 i = floor(p);
             vec2 f = fract(p);
@@ -207,7 +188,6 @@
             return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
           }
 
-          // FBM with variable octaves
           float fbm(vec2 p, int octaves) {
             float value = 0.0;
             float amplitude = 0.4;
@@ -225,51 +205,41 @@
           void main() {
             vec2 pos = uv;
 
-            // Aspect ratio correction
             float aspectRatio = resolution.x / resolution.y;
             pos.x *= aspectRatio;
 
-            // === WIND DIRECTION ===
-            float windRad = radians(windAngle);
-            vec2 windDir = vec2(sin(windRad), cos(windRad));
+            // Unified direction: controls both scroll and gradient
+            float dirRad = radians(direction);
+            vec2 moveDir = vec2(sin(dirRad), cos(dirRad));
 
-            // Smoke coordinates - wind direction controls scroll
-            vec2 smokeCoords = (pos - windDir * time * speed) * scale;
+            // Smoke coordinates with inverted scale (scale=1 -> freq 7, matching original)
+            vec2 smokeCoords = (pos - moveDir * time * speed) * (7.0 / scale);
 
-            // === SOURCE-BASED GRADIENT ===
-            float srcRad = radians(sourceAngle);
-            vec2 awayFromSource = vec2(sin(srcRad), cos(srcRad));
-            float gradientBasis = dot(uv, awayFromSource);
+            // Gradient along movement direction (aspect-corrected)
+            float gradientBasis = dot(pos, moveDir);
 
-            // === MULTI-LAYER NOISE SYSTEM ===
+            // Octaves from detail parameter (detail=0.75 -> 5 octaves, matching original)
             int octaves = 2 + int(detail * 4.0);
 
             // Gradient with noise modulation
             float gradient = mix(gradientBasis * 0.3, gradientBasis * 0.7, fbm(smokeCoords, octaves));
 
-            // Layer 1: Base smoke shape
+            // Base smoke shape
             float noise1 = fbm(smokeCoords, octaves);
 
-            // Layer 2: Turbulent movement (feeds from layer 1)
-            float noise2 = warp * fbm(smokeCoords + noise1 + time, octaves) - 0.5;
+            // Turbulent movement (feeds from base)
+            float noise2 = turbulence * fbm(smokeCoords + noise1 + time, octaves) - 0.5;
 
-            // Layer 3: Cross-feed for organic movement
-            float finalNoise = warp * fbm(vec2(noise1, noise2), octaves);
-
-            // Smoke intensity: layers feeding into each other
+            // Smoke intensity: cross-feed for organic movement
             float smokeIntensity = fbm(vec2(noise2, noise1), octaves);
 
-            // === COLORS ===
-            vec3 smokeColor = mix(color2, color1, smokeIntensity) * intensity;
+            // Color with baked intensity (*0.9 matches original default)
+            vec3 smokeColor = mix(color2, color1, smokeIntensity) * 0.9;
 
-            // === ALPHA ===
-            float edgeSharpness = 0.1 + softness * 0.5;
-            float smokeAlpha = smoothstep(0.0, edgeSharpness, (smokeIntensity - gradient + coverage) * reach);
+            // Alpha with baked edge sharpness (1.0) and bias (0.3) matching original defaults
+            float smokeAlpha = smoothstep(0.0, 1.0, (smokeIntensity - gradient + 0.3) * height);
 
-            // Final alpha with density
-            float finalAlpha = smokeAlpha * density;
-
-            fragColor = vec4(smokeColor, finalAlpha);
+            fragColor = vec4(smokeColor, smokeAlpha * opacity);
           }
         `;
 
@@ -288,6 +258,12 @@
           return;
         }
 
+        // Cleanup shaders after successful linkage
+        gl.detachShader(this.program, vertexShader);
+        gl.deleteShader(vertexShader);
+        gl.detachShader(this.program, fragmentShader);
+        gl.deleteShader(fragmentShader);
+
         gl.useProgram(this.program);
 
         this.uniforms = {
@@ -295,17 +271,13 @@
           resolution: gl.getUniformLocation(this.program, 'resolution'),
           color1: gl.getUniformLocation(this.program, 'color1'),
           color2: gl.getUniformLocation(this.program, 'color2'),
-          intensity: gl.getUniformLocation(this.program, 'intensity'),
           speed: gl.getUniformLocation(this.program, 'speed'),
-          windAngle: gl.getUniformLocation(this.program, 'windAngle'),
+          direction: gl.getUniformLocation(this.program, 'direction'),
           scale: gl.getUniformLocation(this.program, 'scale'),
-          density: gl.getUniformLocation(this.program, 'density'),
-          softness: gl.getUniformLocation(this.program, 'softness'),
+          opacity: gl.getUniformLocation(this.program, 'opacity'),
           detail: gl.getUniformLocation(this.program, 'detail'),
-          warp: gl.getUniformLocation(this.program, 'warp'),
-          coverage: gl.getUniformLocation(this.program, 'coverage'),
-          sourceAngle: gl.getUniformLocation(this.program, 'sourceAngle'),
-          reach: gl.getUniformLocation(this.program, 'reach')
+          turbulence: gl.getUniformLocation(this.program, 'turbulence'),
+          height: gl.getUniformLocation(this.program, 'height')
         };
       }
 
@@ -339,7 +311,7 @@
         }
 
         const gl = this.gl;
-        const currentTime = (Date.now() - this.startTime) / 1000;
+        const currentTime = (performance.now() - this.startTime) / 1000;
 
         gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -348,18 +320,14 @@
 
         gl.uniform3fv(this.uniforms.color1, this.hexToRgb(this.settings.color1));
         gl.uniform3fv(this.uniforms.color2, this.hexToRgb(this.settings.color2));
-        gl.uniform1f(this.uniforms.intensity, this.settings.intensity);
 
         gl.uniform1f(this.uniforms.speed, this.settings.speed);
-        gl.uniform1f(this.uniforms.windAngle, this.settings.windAngle);
+        gl.uniform1f(this.uniforms.direction, this.settings.direction);
         gl.uniform1f(this.uniforms.scale, this.settings.scale);
-        gl.uniform1f(this.uniforms.density, this.settings.density);
-        gl.uniform1f(this.uniforms.softness, this.settings.softness);
+        gl.uniform1f(this.uniforms.opacity, this.settings.opacity);
         gl.uniform1f(this.uniforms.detail, this.settings.detail);
-        gl.uniform1f(this.uniforms.warp, this.settings.warp);
-        gl.uniform1f(this.uniforms.coverage, this.settings.coverage);
-        gl.uniform1f(this.uniforms.sourceAngle, this.settings.sourceAngle);
-        gl.uniform1f(this.uniforms.reach, this.settings.reach);
+        gl.uniform1f(this.uniforms.turbulence, this.settings.turbulence);
+        gl.uniform1f(this.uniforms.height, this.settings.height);
 
         gl.drawArrays(gl.TRIANGLES, 0, 6);
 
@@ -390,6 +358,8 @@
           this.gl.deleteProgram(this.program);
           this.program = null;
         }
+        this.gl = null;
+        this.canvas = null;
         window.removeEventListener('resize', this.handleResize);
       }
     }

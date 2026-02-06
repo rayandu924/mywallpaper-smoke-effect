@@ -1,112 +1,57 @@
-# 🌫️ Smoke Effect Add-on for MyWallpaper
+# Smoke Effect Add-on for MyWallpaper
 
-A mesmerizing, premium-quality animated smoke effect with customizable colors and fluid dynamics. Built with pure WebGL for maximum performance.
+Animated smoke effect with customizable colors and fluid dynamics. Pure WebGL2 shader with Fractal Brownian Motion.
 
-![Smoke Effect Preview](https://img.shields.io/badge/MyWallpaper-Add--on-purple?style=for-the-badge)
-![SDK Version](https://img.shields.io/badge/SDK-2.7.0+-blue?style=flat-square)
+![MyWallpaper Add-on](https://img.shields.io/badge/MyWallpaper-Add--on-purple?style=for-the-badge)
+![SDK Version](https://img.shields.io/badge/SDK-2.17.1-blue?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
-## ✨ Features
-
-- **Pure WebGL** - No external libraries, maximum performance
-- **6-Octave Fractal Brownian Motion** - Ultra-detailed smoke simulation
-- **4 Customizable Colors** - Create any color scheme you want
-- **Multiple Flow Directions** - Up, Down, Left, Right, or Spiral
-- **Edge Fade Options** - Bottom, Top, Both, Radial Vignette, or None
-- **Hot-Reload Support** - See changes instantly
-- **Responsive** - Adapts to any screen size
-
-## 🎨 Settings
+## Settings
 
 ### Colors
-| Setting | Description | Default |
-|---------|-------------|---------|
-| Primary Color | Main smoke color | `#6e0061` |
-| Secondary Color | Blends with primary | `#ad00a1` |
-| Accent Color | Highlights and wisps | `#a401d6` |
-| Glow Color | Ethereal glow effect | `#4a0080` |
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| Primary Color | color | `#FF6B35` | Main smoke color |
+| Secondary Color | color | `#FF0000` | Blends with primary |
+| Randomize Colors | button | - | Generate harmonious random colors |
 
-### Animation
-| Setting | Range | Default |
-|---------|-------|---------|
-| Flow Speed | 0.1 - 3.0 | 0.8 |
-| Turbulence | 1 - 10 | 4 |
-| Smoke Density | 1 - 15 | 8 |
+### Motion
+| Setting | Range | Default | Description |
+|---------|-------|---------|-------------|
+| Speed | 0 - 1 | 0.2 | How fast the smoke moves |
+| Direction | 0 - 360 | 0 | Unified direction (0=up, 90=right, 180=down, 270=left) |
 
-### Effects
-| Setting | Options | Default |
-|---------|---------|---------|
-| Color Intensity | 0.1 - 2.0 | 1.0 |
-| Edge Fade | None, Bottom, Top, Both, Radial | Bottom |
-| Flow Direction | Up, Down, Left, Right, Spiral | Up |
-| Detail Level | 3 - 8 octaves | 6 |
+### Appearance
+| Setting | Range | Default | Description |
+|---------|-------|---------|-------------|
+| Scale | 0.2 - 5 | 1.0 | Pattern size (bigger = larger patterns) |
+| Opacity | 0 - 1 | 1.0 | Overall transparency |
+| Detail | 0 - 3 | 0.75 | Noise complexity (0=blobs, 3=fine details) |
+| Turbulence | 0 - 2 | 0.9 | Chaos and distortion |
+| Height | 0.3 - 3 | 1.0 | How far the smoke extends |
 
-## 🚀 Installation
+## Installation
 
 1. Download or clone this repository
-2. In MyWallpaper, go to **Add-ons** → **Install from folder**
+2. In MyWallpaper, go to **Add-ons** > **Install from folder**
 3. Select the `mywallpaper-smoke-effect` folder
-4. The add-on will appear in your add-ons list
 
-## 🛠️ Development
-
-To test locally:
+## Development
 
 ```bash
-# Start a local server
 npx serve . -p 3000
-
-# In MyWallpaper:
-# Settings → Developer → Enter http://localhost:3000 → Test
+# In MyWallpaper: Settings > Developer > Enter http://localhost:3000 > Test
 ```
 
-## 📜 Technical Details
+## Technical Details
 
-### Shader Techniques Used
+- **WebGL2 only** (`#version 300 es`) - no WebGL1 fallback
+- **Fractal Brownian Motion** with variable octaves (2-14 based on detail)
+- **Domain warping** for organic smoke movement
+- `performance.now()` for sub-millisecond timing precision
+- Shader cleanup (`detachShader` + `deleteShader`) after linkage
+- Proper lifecycle management (pause/resume/dispose)
 
-- **Quintic Interpolation** - Smoother gradients than standard smoothstep
-- **Domain Warping** - Multiple layers of noise warping for organic movement
-- **Ridged Noise** - Creates wispy smoke trails
-- **Turbulent Noise** - Adds chaotic swirl patterns
-- **Film Grain** - Subtle organic texture overlay
+## License
 
-### Performance Optimizations
-
-- Cached uniform locations
-- High-performance WebGL context
-- Proper animation frame management
-- Lifecycle pause/resume support
-
-## 🎭 Preset Ideas
-
-### Fire & Ember
-- Primary: `#ff4400`
-- Secondary: `#ff8800`
-- Accent: `#ffcc00`
-- Glow: `#ff2200`
-
-### Ocean Mist
-- Primary: `#004466`
-- Secondary: `#0088aa`
-- Accent: `#00ccff`
-- Glow: `#002244`
-
-### Aurora Borealis
-- Primary: `#00ff88`
-- Secondary: `#00aaff`
-- Accent: `#ff00ff`
-- Glow: `#004444`
-
-### Mystical Purple (Default)
-- Primary: `#6e0061`
-- Secondary: `#ad00a1`
-- Accent: `#a401d6`
-- Glow: `#4a0080`
-
-## 📄 License
-
-MIT License - Feel free to use, modify, and distribute.
-
----
-
-Made with 💜 for the MyWallpaper community
+MIT License
