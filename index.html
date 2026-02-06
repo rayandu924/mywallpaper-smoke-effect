@@ -229,17 +229,20 @@
             // Octaves from detail parameter (detail=0.75 -> 5 octaves, matching original)
             int octaves = 2 + int(detail * 4.0);
 
+            // Base noise (reused for gradient and warp — avoids redundant fbm call)
+            float baseNoise = fbm(smokeCoords, octaves);
+
             // Gradient with noise modulation
-            float gradient = mix(gradientBasis * 0.3, gradientBasis * 0.7, fbm(smokeCoords, octaves));
+            float gradient = mix(gradientBasis * 0.3, gradientBasis * 0.7, baseNoise);
 
-            // Base smoke shape
-            float noise1 = fbm(smokeCoords, octaves);
+            // Independent Y warp (offset breaks correlation with baseNoise — no wave bands)
+            float warpY = fbm(smokeCoords + vec2(5.2, 1.3), octaves);
 
-            // Turbulent movement (diagonal drift breaks wave artifacts without masking speed)
-            float noise2 = turbulence * fbm(smokeCoords + noise1 + time * 0.5, octaves) - 0.5;
+            // Turbulent movement with 2D warp (x and y warped independently)
+            float noise2 = turbulence * fbm(smokeCoords + vec2(baseNoise, warpY) + time * 0.5, octaves) - 0.5;
 
             // Smoke intensity: cross-feed for organic movement
-            float smokeIntensity = fbm(vec2(noise2, noise1), octaves);
+            float smokeIntensity = fbm(vec2(noise2, baseNoise), octaves);
 
             // Color brightness
             vec3 smokeColor = mix(color2, color1, smokeIntensity) * brightness;
