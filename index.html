@@ -31,6 +31,7 @@
           origin: config.origin ?? 0,
           direction: config.direction ?? 0,
           scale: config.scale ?? 1.0,
+          brightness: config.brightness ?? 0.9,
           opacity: config.opacity ?? 1.0,
           detail: config.detail ?? 0.75,
           turbulence: config.turbulence ?? 0.9,
@@ -166,6 +167,7 @@
           uniform float origin;
           uniform float direction;
           uniform float scale;
+          uniform float brightness;
           uniform float opacity;
           uniform float detail;
           uniform float turbulence;
@@ -239,8 +241,8 @@
             // Smoke intensity: cross-feed for organic movement
             float smokeIntensity = fbm(vec2(noise2, noise1), octaves);
 
-            // Color with baked intensity (*0.9 matches original default)
-            vec3 smokeColor = mix(color2, color1, smokeIntensity) * 0.9;
+            // Color brightness
+            vec3 smokeColor = mix(color2, color1, smokeIntensity) * brightness;
 
             // Alpha: fade controls gradient sharpness, height controls extension
             float smokeAlpha = smoothstep(0.0, fade, (smokeIntensity - gradient + 0.3) * height);
@@ -281,6 +283,7 @@
           origin: gl.getUniformLocation(this.program, 'origin'),
           direction: gl.getUniformLocation(this.program, 'direction'),
           scale: gl.getUniformLocation(this.program, 'scale'),
+          brightness: gl.getUniformLocation(this.program, 'brightness'),
           opacity: gl.getUniformLocation(this.program, 'opacity'),
           detail: gl.getUniformLocation(this.program, 'detail'),
           turbulence: gl.getUniformLocation(this.program, 'turbulence'),
@@ -333,6 +336,7 @@
         gl.uniform1f(this.uniforms.origin, this.settings.origin);
         gl.uniform1f(this.uniforms.direction, this.settings.direction);
         gl.uniform1f(this.uniforms.scale, this.settings.scale);
+        gl.uniform1f(this.uniforms.brightness, this.settings.brightness);
         gl.uniform1f(this.uniforms.opacity, this.settings.opacity);
         gl.uniform1f(this.uniforms.detail, this.settings.detail);
         gl.uniform1f(this.uniforms.turbulence, this.settings.turbulence);

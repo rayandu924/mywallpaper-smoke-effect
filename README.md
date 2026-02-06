@@ -26,6 +26,7 @@ Animated smoke effect with customizable colors and fluid dynamics. Pure WebGL2 s
 | Setting | Range | Default | Description |
 |---------|-------|---------|-------------|
 | Scale | 0.2 - 5 | 1.0 | Pattern size (bigger = larger patterns) |
+| Brightness | 0.1 - 3 | 0.9 | Color brightness (0.9 = natural, 2+ = glowing) |
 | Opacity | 0 - 1 | 1.0 | Overall transparency |
 | Detail | 0 - 3 | 0.75 | Noise complexity (0=blobs, 3=fine details) |
 | Turbulence | 0 - 2 | 0.9 | Chaos and distortion |
