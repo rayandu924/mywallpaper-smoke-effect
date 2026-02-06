@@ -233,8 +233,8 @@
             // Base smoke shape
             float noise1 = fbm(smokeCoords, octaves);
 
-            // Turbulent movement (feeds from base, follows direction)
-            float noise2 = turbulence * fbm(smokeCoords + noise1 + moveDir * time, octaves) - 0.5;
+            // Turbulent movement (feeds from base, follows direction and speed)
+            float noise2 = turbulence * fbm(smokeCoords + noise1 + moveDir * time * speed, octaves) - 0.5;
 
             // Smoke intensity: cross-feed for organic movement
             float smokeIntensity = fbm(vec2(noise2, noise1), octaves);
