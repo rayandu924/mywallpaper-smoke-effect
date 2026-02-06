@@ -202,11 +202,13 @@
             float value = 0.0;
             float amplitude = 0.4;
             vec2 freq = p;
+            // Rotation between octaves breaks grid alignment artifacts
+            mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);
 
             for (int i = 0; i < 14; i++) {
               if (i >= octaves) break;
               value += amplitude * noise(freq);
-              freq *= 2.0;
+              freq = rot * freq * 2.0;
               amplitude *= 0.4;
             }
             return value;
@@ -227,8 +229,11 @@
             float dirRad = radians(direction);
             vec2 moveDir = vec2(sin(dirRad), cos(dirRad));
 
+            // Speed controls all animation (scroll + turbulence)
+            float t = time * speed;
+
             // Smoke coordinates with inverted scale (scale=1 -> freq 7, matching original)
-            vec2 smokeCoords = (pos - moveDir * time * speed) * (7.0 / scale);
+            vec2 smokeCoords = (pos - moveDir * t) * (7.0 / scale);
 
             // Octaves from detail parameter (detail=0.75 -> 5 octaves, matching original)
             int octaves = 2 + int(detail * 4.0);
@@ -243,7 +248,7 @@
             float warpY = fbm(smokeCoords + vec2(5.2, 1.3), octaves);
 
             // Turbulent movement with 2D warp (x and y warped independently)
-            float noise2 = turbulence * fbm(smokeCoords + vec2(baseNoise, warpY) + time * 0.5, octaves) - 0.5;
+            float noise2 = turbulence * fbm(smokeCoords + vec2(baseNoise, warpY) + t * 0.7, octaves) - 0.5;
 
             // Smoke intensity: cross-feed for organic movement
             float smokeIntensity = fbm(vec2(noise2, baseNoise), octaves);
