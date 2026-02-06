@@ -25,18 +25,19 @@
         const config = window.MyWallpaper?.config || {};
 
         this.settings = {
-          color1: config.color1 ?? '#6e0061',
-          color2: config.color2 ?? '#ad00a1',
-          speed: config.speed ?? 0.01,
+          color1: config.color1 ?? '#FF6B35',
+          color2: config.color2 ?? '#FF0000',
+          intensity: config.intensity ?? 0.9,
+          speed: config.speed ?? 0.2,
           windAngle: config.windAngle ?? 0,
-          scale: config.scale ?? 2.2,
-          density: config.density ?? 1.35,
-          softness: config.softness ?? 2.7,
-          detail: config.detail ?? 2.0,
-          warp: config.warp ?? 2.0,
-          coverage: config.coverage ?? 1.0,
+          scale: config.scale ?? 7.0,
+          density: config.density ?? 1.0,
+          softness: config.softness ?? 1.8,
+          detail: config.detail ?? 0.75,
+          warp: config.warp ?? 0.9,
+          coverage: config.coverage ?? 0.3,
           sourceAngle: config.sourceAngle ?? 0,
-          reach: config.reach ?? 0.8
+          reach: config.reach ?? 1.0
         };
 
         // Bind methods for event listener cleanup
@@ -172,6 +173,7 @@
           uniform vec2 resolution;
           uniform vec3 color1;
           uniform vec3 color2;
+          uniform float intensity;
           uniform float speed;
           uniform float windAngle;
           uniform float scale;
@@ -188,7 +190,7 @@
 
           // Hash function for noise
           float hash(vec2 p) {
-            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+            return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453123);
           }
 
           // Smooth noise
@@ -202,7 +204,7 @@
             float c = hash(i + vec2(0.0, 1.0));
             float d = hash(i + vec2(1.0, 1.0));
 
-            return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+            return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
           }
 
           // FBM with variable octaves
@@ -211,7 +213,7 @@
             float amplitude = 0.4;
             vec2 freq = p;
 
-            for (int i = 0; i < 6; i++) {
+            for (int i = 0; i < 14; i++) {
               if (i >= octaves) break;
               value += amplitude * noise(freq);
               freq *= 2.0;
@@ -222,8 +224,6 @@
 
           void main() {
             vec2 pos = uv;
-            float nx = (uv.x + 1.0) * 0.5;
-            float ny = (uv.y + 1.0) * 0.5;
 
             // Aspect ratio correction
             float aspectRatio = resolution.x / resolution.y;
@@ -233,63 +233,41 @@
             float windRad = radians(windAngle);
             vec2 windDir = vec2(sin(windRad), cos(windRad));
 
-            // Smoke coordinates - wind applied BEFORE scale
-            vec2 smokeCoords = (pos - windDir * time * speed * 0.5) * scale;
+            // Smoke coordinates - wind direction controls scroll
+            vec2 smokeCoords = (pos - windDir * time * speed) * scale;
 
-            // === SOURCE DISTANCE ===
+            // === SOURCE-BASED GRADIENT ===
             float srcRad = radians(sourceAngle);
-            vec2 srcDir = vec2(-sin(srcRad), -cos(srcRad));
-
-            float dist = 0.0;
-            if (srcDir.y < 0.0) {
-              dist += abs(srcDir.y) * ny;
-            } else {
-              dist += abs(srcDir.y) * (1.0 - ny);
-            }
-            if (srcDir.x < 0.0) {
-              dist += abs(srcDir.x) * nx;
-            } else {
-              dist += abs(srcDir.x) * (1.0 - nx);
-            }
-
-            // Normalized distance (0 at source, 1 at reach)
-            float normalizedDist = clamp(dist / reach, 0.0, 1.0);
-
-            // Smooth fade that starts early and reaches 0 at the limit
-            // Fade starts at 50% of reach, fully gone at 100%
-            float reachFade = 1.0 - smoothstep(0.4, 1.0, normalizedDist);
-
-            // Natural gradient for organic dissipation
-            float gradient = normalizedDist * (0.5 + fbm(smokeCoords, 3) * 0.4);
+            vec2 awayFromSource = vec2(sin(srcRad), cos(srcRad));
+            float gradientBasis = dot(uv, awayFromSource);
 
             // === MULTI-LAYER NOISE SYSTEM ===
             int octaves = 2 + int(detail * 4.0);
+
+            // Gradient with noise modulation
+            float gradient = mix(gradientBasis * 0.3, gradientBasis * 0.7, fbm(smokeCoords, octaves));
 
             // Layer 1: Base smoke shape
             float noise1 = fbm(smokeCoords, octaves);
 
             // Layer 2: Turbulent movement (feeds from layer 1)
-            float noise2 = warp * fbm(smokeCoords + noise1 + time * 0.5, octaves) - 0.5;
+            float noise2 = warp * fbm(smokeCoords + noise1 + time, octaves) - 0.5;
 
             // Layer 3: Cross-feed for organic movement
-            float finalNoise = warp * fbm(vec2(noise1, noise2), 3);
+            float finalNoise = warp * fbm(vec2(noise1, noise2), octaves);
 
             // Smoke intensity: layers feeding into each other
             float smokeIntensity = fbm(vec2(noise2, noise1), octaves);
 
-            // === COVERAGE + NATURAL DISSIPATION ===
-            float smokeValue = smokeIntensity - gradient + coverage;
-
-            // === SOFTNESS (edge width) ===
-            // softness 0 = sharp edges, softness 1 = very soft/blurry edges
-            float edgeSharpness = 0.1 + softness * 0.5;
-            float smokeAlpha = smoothstep(0.0, edgeSharpness, smokeValue * reach);
-
             // === COLORS ===
-            vec3 smokeColor = mix(color2, color1, smokeIntensity);
+            vec3 smokeColor = mix(color2, color1, smokeIntensity) * intensity;
 
-            // Apply reach fade for smooth disappearance
-            float finalAlpha = smokeAlpha * density * reachFade;
+            // === ALPHA ===
+            float edgeSharpness = 0.1 + softness * 0.5;
+            float smokeAlpha = smoothstep(0.0, edgeSharpness, (smokeIntensity - gradient + coverage) * reach);
+
+            // Final alpha with density
+            float finalAlpha = smokeAlpha * density;
 
             fragColor = vec4(smokeColor, finalAlpha);
           }
@@ -317,6 +295,7 @@
           resolution: gl.getUniformLocation(this.program, 'resolution'),
           color1: gl.getUniformLocation(this.program, 'color1'),
           color2: gl.getUniformLocation(this.program, 'color2'),
+          intensity: gl.getUniformLocation(this.program, 'intensity'),
           speed: gl.getUniformLocation(this.program, 'speed'),
           windAngle: gl.getUniformLocation(this.program, 'windAngle'),
           scale: gl.getUniformLocation(this.program, 'scale'),
@@ -369,6 +348,7 @@
 
         gl.uniform3fv(this.uniforms.color1, this.hexToRgb(this.settings.color1));
         gl.uniform3fv(this.uniforms.color2, this.hexToRgb(this.settings.color2));
+        gl.uniform1f(this.uniforms.intensity, this.settings.intensity);
 
         gl.uniform1f(this.uniforms.speed, this.settings.speed);
         gl.uniform1f(this.uniforms.windAngle, this.settings.windAngle);
