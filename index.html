@@ -235,9 +235,9 @@
             return 130.0 * dot(m, g);
           }
 
-          // Simplex noise mapped to [0, 1]
+          // Simplex noise mapped to [0, 1] with boosted contrast
           float noise(vec2 p) {
-            return snoise(p) * 0.5 + 0.5;
+            return clamp(snoise(p) * 0.6 + 0.5, 0.0, 1.0);
           }
 
           float fbm(vec2 p, int octaves) {
@@ -289,10 +289,10 @@
             float warpY = noise(smokeCoords * 1.7 + vec2(5.2, 1.3));
 
             // Turbulent movement with 2D warp (x and y warped independently)
-            float noise2 = turbulence * fbm(smokeCoords + vec2(baseNoise, warpY) + t * 0.7, octaves) - 0.5;
+            float noise2 = turbulence * fbm(smokeCoords + vec2(baseNoise, warpY) * 1.5 + t * 0.7, octaves) - 0.5;
 
             // Smoke intensity: cross-feed for organic movement (half octaves — already-distorted input)
-            float smokeIntensity = fbm(vec2(noise2, baseNoise), max(octaves / 2, 2));
+            float smokeIntensity = fbm(vec2(noise2, baseNoise) * 6.0, max(octaves / 2, 2));
 
             // Color brightness
             vec3 smokeColor = mix(color2, color1, smokeIntensity) * brightness;
