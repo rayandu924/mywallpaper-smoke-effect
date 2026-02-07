@@ -297,9 +297,8 @@
             // Color brightness
             vec3 smokeColor = mix(color2, color1, smokeIntensity) * brightness;
 
-            // Organic edge: noise-driven height variation (smoke reaches different heights)
-            float heightNoise = noise(pos * 3.0 + moveDir * t + vec2(3.7, 8.1));
-            float smokeAlpha = smoothstep(0.0, 0.15, smokeIntensity - gradient + heightNoise * height + height - 1.0);
+            // Alpha: height controls how far smoke extends
+            float smokeAlpha = smoothstep(0.0, 0.8, (smokeIntensity - gradient + 0.3) * height);
 
             // Density: reshape alpha curve (low = wispy, high = thick)
             smokeAlpha = pow(smokeAlpha, 1.0 / max(density, 0.01));
