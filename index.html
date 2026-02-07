@@ -35,7 +35,6 @@
           opacity: config.opacity ?? 1.0,
           detail: config.detail ?? 3.0,
           turbulence: config.turbulence ?? 0.55,
-          fade: config.fade ?? 0.8,
           height: config.height ?? 0.8,
           quality: config.quality ?? 1.0
         };
@@ -188,7 +187,6 @@
           uniform float opacity;
           uniform float detail;
           uniform float turbulence;
-          uniform float fade;
           uniform float height;
 
           in vec2 uv;
@@ -261,7 +259,7 @@
             float aspectRatio = resolution.x / resolution.y;
             pos.x *= aspectRatio;
 
-            // Origin: where smoke comes from (controls gradient/fade)
+            // Origin: where smoke comes from (controls gradient)
             float originRad = radians(origin);
             vec2 originDir = vec2(sin(originRad), cos(originRad));
             float gradientBasis = dot(pos, originDir);
@@ -297,8 +295,9 @@
             // Color brightness
             vec3 smokeColor = mix(color2, color1, smokeIntensity) * brightness;
 
-            // Alpha: fade controls gradient sharpness, height controls extension
-            float smokeAlpha = smoothstep(0.0, fade, (smokeIntensity - gradient + 0.3) * height);
+            // Organic edge: noise-driven height variation (smoke reaches different heights)
+            float heightNoise = noise(pos * 3.0 + moveDir * t + vec2(3.7, 8.1));
+            float smokeAlpha = smoothstep(0.0, 0.15, smokeIntensity - gradient + heightNoise * height);
 
             // Dithering: break Mach bands with screen-space noise (±0.5/255)
             float dither = (hash(gl_FragCoord.xy + fract(time)) - 0.5) / 255.0;
@@ -345,7 +344,6 @@
           opacity: gl.getUniformLocation(this.program, 'opacity'),
           detail: gl.getUniformLocation(this.program, 'detail'),
           turbulence: gl.getUniformLocation(this.program, 'turbulence'),
-          fade: gl.getUniformLocation(this.program, 'fade'),
           height: gl.getUniformLocation(this.program, 'height')
         };
       }
@@ -405,7 +403,6 @@
           gl.uniform1f(this.uniforms.opacity, this.settings.opacity);
           gl.uniform1f(this.uniforms.detail, this.settings.detail);
           gl.uniform1f(this.uniforms.turbulence, this.settings.turbulence);
-          gl.uniform1f(this.uniforms.fade, this.settings.fade);
           gl.uniform1f(this.uniforms.height, this.settings.height);
         }
 
