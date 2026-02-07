@@ -36,7 +36,8 @@
           detail: config.detail ?? 3.0,
           turbulence: config.turbulence ?? 2.0,
           fade: config.fade ?? 1.2,
-          height: config.height ?? 0.8
+          height: config.height ?? 0.8,
+          quality: config.quality ?? 1.0
         };
 
         // Pre-allocated typed arrays (avoid per-frame GC)
@@ -80,11 +81,29 @@
         this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
         this.gl.clearColor(0.0, 0.0, 0.0, 0.0);
 
+        this.generateNoiseTexture();
         this.resize();
       }
 
+      generateNoiseTexture() {
+        const gl = this.gl;
+        const size = 256;
+        const data = new Uint8Array(size * size);
+        for (let i = 0; i < data.length; i++) {
+          data[i] = Math.random() * 256;
+        }
+        this.noiseTexture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, this.noiseTexture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, size, size, 0, gl.RED, gl.UNSIGNED_BYTE, data);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      }
+
       resize() {
-        const dpr = window.devicePixelRatio || 1;
+        const quality = this.settings.quality ?? 1.0;
+        const dpr = (window.devicePixelRatio || 1) * quality;
         const width = this.canvas.clientWidth * dpr;
         const height = this.canvas.clientHeight * dpr;
 
@@ -106,9 +125,11 @@
           const api = window.MyWallpaper;
 
           api.onSettingsChange((newSettings) => {
+            const qualityChanged = newSettings.quality !== undefined && newSettings.quality !== this.settings.quality;
             Object.assign(this.settings, newSettings);
             this.cacheColors();
             this.settingsDirty = true;
+            if (qualityChanged) this.resize();
           });
 
           api.onButtonClick('randomizeColorsBtn', () => {
@@ -186,29 +207,21 @@
           uniform float turbulence;
           uniform float fade;
           uniform float height;
+          uniform sampler2D noiseTex;
 
           in vec2 uv;
           out vec4 fragColor;
 
-          // Integer hash — no sin() periodic artifacts
+          // Integer hash — kept for screen-space dithering only
           float hash(vec2 p) {
             vec3 p3 = fract(vec3(p.xyx) * 0.1031);
             p3 += dot(p3, p3.yzx + 33.33);
             return fract((p3.x + p3.y) * p3.z);
           }
 
+          // Texture-based noise — hardware bilinear filtering (~1 op vs ~55 ALU)
           float noise(vec2 p) {
-            vec2 i = floor(p);
-            vec2 f = fract(p);
-            // Quintic interpolation (C2 continuous — eliminates Mach bands)
-            vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
-
-            float a = hash(i);
-            float b = hash(i + vec2(1.0, 0.0));
-            float c = hash(i + vec2(0.0, 1.0));
-            float d = hash(i + vec2(1.0, 1.0));
-
-            return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+            return texture(noiseTex, p / 256.0).r;
           }
 
           float fbm(vec2 p, int octaves) {
@@ -263,8 +276,8 @@
             // Turbulent movement with 2D warp (x and y warped independently)
             float noise2 = turbulence * fbm(smokeCoords + vec2(baseNoise, warpY) + t * 0.7, octaves) - 0.5;
 
-            // Smoke intensity: cross-feed for organic movement
-            float smokeIntensity = fbm(vec2(noise2, baseNoise), octaves);
+            // Smoke intensity: cross-feed for organic movement (half octaves — already-distorted input)
+            float smokeIntensity = fbm(vec2(noise2, baseNoise), max(octaves / 2, 2));
 
             // Color brightness
             vec3 smokeColor = mix(color2, color1, smokeIntensity) * brightness;
@@ -318,8 +331,14 @@
           detail: gl.getUniformLocation(this.program, 'detail'),
           turbulence: gl.getUniformLocation(this.program, 'turbulence'),
           fade: gl.getUniformLocation(this.program, 'fade'),
-          height: gl.getUniformLocation(this.program, 'height')
+          height: gl.getUniformLocation(this.program, 'height'),
+          noiseTex: gl.getUniformLocation(this.program, 'noiseTex')
         };
+
+        // Bind noise texture to unit 0 (stays bound permanently)
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, this.noiseTexture);
+        gl.uniform1i(this.uniforms.noiseTex, 0);
       }
 
       compileShader(source, type) {
@@ -406,9 +425,15 @@
 
       dispose() {
         this.stop();
-        if (this.gl && this.program) {
-          this.gl.deleteProgram(this.program);
-          this.program = null;
+        if (this.gl) {
+          if (this.noiseTexture) {
+            this.gl.deleteTexture(this.noiseTexture);
+            this.noiseTexture = null;
+          }
+          if (this.program) {
+            this.gl.deleteProgram(this.program);
+            this.program = null;
+          }
         }
         this.gl = null;
         this.canvas = null;

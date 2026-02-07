@@ -78,6 +78,20 @@
       "default": 0
     },
 
+    "performanceSection": {
+      "type": "section",
+      "label": "⚡ Performance"
+    },
+    "quality": {
+      "type": "range",
+      "label": "Quality",
+      "description": "Rendering resolution (lower = faster, 1 = full resolution)",
+      "min": 0.25,
+      "max": 1.0,
+      "step": 0.05,
+      "default": 1.0
+    },
+
     "appearanceSection": {
       "type": "section",
       "label": "🌫️ Appearance"
