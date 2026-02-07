@@ -297,7 +297,7 @@
 
             // Organic edge: noise-driven height variation (smoke reaches different heights)
             float heightNoise = noise(pos * 3.0 + moveDir * t + vec2(3.7, 8.1));
-            float smokeAlpha = smoothstep(0.0, 0.15, smokeIntensity - gradient + heightNoise * height);
+            float smokeAlpha = smoothstep(0.0, 0.15, smokeIntensity - gradient + heightNoise * height + height - 1.0);
 
             // Dithering: break Mach bands with screen-space noise (±0.5/255)
             float dither = (hash(gl_FragCoord.xy + fract(time)) - 0.5) / 255.0;
