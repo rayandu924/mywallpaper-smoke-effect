@@ -82,6 +82,7 @@
         this.gl.clearColor(0.0, 0.0, 0.0, 0.0);
 
         this.generateNoiseTexture();
+        this.generateFbmTexture();
         this.resize();
       }
 
@@ -92,9 +93,76 @@
         for (let i = 0; i < data.length; i++) {
           data[i] = Math.random() * 256;
         }
+        this.noiseData = data;
         this.noiseTexture = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, this.noiseTexture);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, size, size, 0, gl.RED, gl.UNSIGNED_BYTE, data);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      }
+
+      generateFbmTexture() {
+        const gl = this.gl;
+        const size = 256;
+        const noiseData = this.noiseData;
+
+        // Bilinear sample matching GPU texture lookup (REPEAT + LINEAR)
+        function sampleNoise(x, y) {
+          x = ((x % size) + size) % size;
+          y = ((y % size) + size) % size;
+          const ix = Math.floor(x);
+          const iy = Math.floor(y);
+          const fx = x - ix;
+          const fy = y - iy;
+          const ix1 = (ix + 1) % size;
+          const iy1 = (iy + 1) % size;
+          const a = noiseData[iy * size + ix] / 255;
+          const b = noiseData[iy * size + ix1] / 255;
+          const c = noiseData[iy1 * size + ix] / 255;
+          const d = noiseData[iy1 * size + ix1] / 255;
+          return a * (1 - fx) * (1 - fy) + b * fx * (1 - fy) + c * (1 - fx) * fy + d * fx * fy;
+        }
+
+        // Bake FBM at 4 octave levels into RGBA (2, 4, 6, 8 octaves)
+        // FBM_PERIOD = 8 world units per texture tile
+        const FBM_PERIOD = 8.0;
+        const data = new Uint8Array(size * size * 4);
+
+        for (let j = 0; j < size; j++) {
+          for (let i = 0; i < size; i++) {
+            const px = i * FBM_PERIOD / size;
+            const py = j * FBM_PERIOD / size;
+
+            let value = 0, amplitude = 0.4;
+            let fx = px, fy = py;
+            let v2 = 0, v4 = 0, v6 = 0;
+
+            for (let oct = 0; oct < 8; oct++) {
+              value += amplitude * sampleNoise(fx, fy);
+              if (oct === 1) v2 = value;
+              if (oct === 3) v4 = value;
+              if (oct === 5) v6 = value;
+              // Rotation mat2(0.8, 0.6, -0.6, 0.8) then *2
+              const nfx = (0.8 * fx + 0.6 * fy) * 2.0;
+              const nfy = (-0.6 * fx + 0.8 * fy) * 2.0;
+              fx = nfx;
+              fy = nfy;
+              amplitude *= 0.4;
+            }
+
+            const idx = (j * size + i) * 4;
+            data[idx]     = Math.round(Math.min(1, Math.max(0, v2)) * 255);
+            data[idx + 1] = Math.round(Math.min(1, Math.max(0, v4)) * 255);
+            data[idx + 2] = Math.round(Math.min(1, Math.max(0, v6)) * 255);
+            data[idx + 3] = Math.round(Math.min(1, Math.max(0, value)) * 255);
+          }
+        }
+
+        this.fbmTexture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, this.fbmTexture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -208,6 +276,7 @@
           uniform float fade;
           uniform float height;
           uniform sampler2D noiseTex;
+          uniform sampler2D fbmTex;
 
           in vec2 uv;
           out vec4 fragColor;
@@ -219,25 +288,20 @@
             return fract((p3.x + p3.y) * p3.z);
           }
 
-          // Texture-based noise — hardware bilinear filtering (~1 op vs ~55 ALU)
+          // Texture-based noise — hardware bilinear filtering
           float noise(vec2 p) {
             return texture(noiseTex, p / 256.0).r;
           }
 
+          // Pre-baked FBM — single texture lookup replaces 8-iteration loop
+          // RGBA channels = cumulative FBM at 2, 4, 6, 8 octaves
           float fbm(vec2 p, int octaves) {
-            float value = 0.0;
-            float amplitude = 0.4;
-            vec2 freq = p;
-            // Rotation between octaves breaks grid alignment artifacts
-            mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);
-
-            for (int i = 0; i < 8; i++) {
-              if (i >= octaves) break;
-              value += amplitude * noise(freq);
-              freq = rot * freq * 2.0;
-              amplitude *= 0.4;
-            }
-            return value;
+            vec4 s = texture(fbmTex, p / 8.0);
+            float fo = float(octaves);
+            if (fo <= 2.0) return s.r;
+            if (fo <= 4.0) return mix(s.r, s.g, (fo - 2.0) * 0.5);
+            if (fo <= 6.0) return mix(s.g, s.b, (fo - 4.0) * 0.5);
+            return mix(s.b, s.a, min((fo - 6.0) * 0.5, 1.0));
           }
 
           void main() {
@@ -332,13 +396,17 @@
           turbulence: gl.getUniformLocation(this.program, 'turbulence'),
           fade: gl.getUniformLocation(this.program, 'fade'),
           height: gl.getUniformLocation(this.program, 'height'),
-          noiseTex: gl.getUniformLocation(this.program, 'noiseTex')
+          noiseTex: gl.getUniformLocation(this.program, 'noiseTex'),
+          fbmTex: gl.getUniformLocation(this.program, 'fbmTex')
         };
 
-        // Bind noise texture to unit 0 (stays bound permanently)
+        // Bind textures permanently (unit 0 = noise, unit 1 = pre-baked FBM)
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, this.noiseTexture);
         gl.uniform1i(this.uniforms.noiseTex, 0);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, this.fbmTexture);
+        gl.uniform1i(this.uniforms.fbmTex, 1);
       }
 
       compileShader(source, type) {
@@ -429,6 +497,10 @@
           if (this.noiseTexture) {
             this.gl.deleteTexture(this.noiseTexture);
             this.noiseTexture = null;
+          }
+          if (this.fbmTexture) {
+            this.gl.deleteTexture(this.fbmTexture);
+            this.fbmTexture = null;
           }
           if (this.program) {
             this.gl.deleteProgram(this.program);
