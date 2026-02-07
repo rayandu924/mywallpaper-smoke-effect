@@ -39,6 +39,13 @@
           height: config.height ?? 0.8
         };
 
+        // Pre-allocated typed arrays (avoid per-frame GC)
+        this.color1RGB = new Float32Array(3);
+        this.color2RGB = new Float32Array(3);
+        this.resolutionArray = new Float32Array(2);
+        this.settingsDirty = true;
+
+        this.cacheColors();
         this.handleResize = this.resize.bind(this);
 
         this.init();
@@ -61,7 +68,7 @@
         this.gl = this.canvas.getContext('webgl2', {
           alpha: true,
           premultipliedAlpha: false,
-          antialias: true
+          antialias: false
         });
 
         if (!this.gl) {
@@ -84,8 +91,10 @@
         if (this.canvas.width !== width || this.canvas.height !== height) {
           this.canvas.width = width;
           this.canvas.height = height;
+          this.resolutionArray[0] = width;
+          this.resolutionArray[1] = height;
           if (this.gl) {
-            this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+            this.gl.viewport(0, 0, width, height);
           }
         }
       }
@@ -98,6 +107,8 @@
 
           api.onSettingsChange((newSettings) => {
             Object.assign(this.settings, newSettings);
+            this.cacheColors();
+            this.settingsDirty = true;
           });
 
           api.onButtonClick('randomizeColorsBtn', () => {
@@ -127,6 +138,8 @@
           window.MyWallpaper.settings.setValues(colors);
         }
         Object.assign(this.settings, colors);
+        this.cacheColors();
+        this.settingsDirty = true;
       }
 
       hslToHex(h, s, l) {
@@ -205,7 +218,7 @@
             // Rotation between octaves breaks grid alignment artifacts
             mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);
 
-            for (int i = 0; i < 14; i++) {
+            for (int i = 0; i < 8; i++) {
               if (i >= octaves) break;
               value += amplitude * noise(freq);
               freq = rot * freq * 2.0;
@@ -235,8 +248,8 @@
             // Smoke coordinates with inverted scale (scale=1 -> freq 7, matching original)
             vec2 smokeCoords = (pos - moveDir * t) * (7.0 / scale);
 
-            // Octaves from detail parameter (detail=0.75 -> 5 octaves, matching original)
-            int octaves = 2 + int(detail * 4.0);
+            // Octaves from detail parameter (range 2-8)
+            int octaves = 2 + int(detail * 2.0);
 
             // Base noise (reused for gradient and warp — avoids redundant fbm call)
             float baseNoise = fbm(smokeCoords, octaves);
@@ -244,8 +257,8 @@
             // Gradient with noise modulation
             float gradient = mix(gradientBasis * 0.3, gradientBasis * 0.7, baseNoise);
 
-            // Independent Y warp (offset breaks correlation with baseNoise — no wave bands)
-            float warpY = fbm(smokeCoords + vec2(5.2, 1.3), octaves);
+            // Independent Y warp (single noise — offset breaks correlation with baseNoise)
+            float warpY = noise(smokeCoords * 1.7 + vec2(5.2, 1.3));
 
             // Turbulent movement with 2D warp (x and y warped independently)
             float noise2 = turbulence * fbm(smokeCoords + vec2(baseNoise, warpY) + t * 0.7, octaves) - 0.5;
@@ -323,13 +336,20 @@
         return shader;
       }
 
-      hexToRgb(hex) {
+      hexToRgb(hex, out) {
         const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})?$/i.exec(hex);
-        return result ? [
-          parseInt(result[1], 16) / 255,
-          parseInt(result[2], 16) / 255,
-          parseInt(result[3], 16) / 255
-        ] : [1, 1, 1];
+        if (result) {
+          out[0] = parseInt(result[1], 16) / 255;
+          out[1] = parseInt(result[2], 16) / 255;
+          out[2] = parseInt(result[3], 16) / 255;
+        } else {
+          out[0] = out[1] = out[2] = 1;
+        }
+      }
+
+      cacheColors() {
+        this.hexToRgb(this.settings.color1, this.color1RGB);
+        this.hexToRgb(this.settings.color2, this.color2RGB);
       }
 
       render = () => {
@@ -339,26 +359,25 @@
         }
 
         const gl = this.gl;
-        const currentTime = (performance.now() - this.startTime) / 1000;
 
-        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.uniform1f(this.uniforms.time, (performance.now() - this.startTime) / 1000);
+        gl.uniform2fv(this.uniforms.resolution, this.resolutionArray);
 
-        gl.uniform1f(this.uniforms.time, currentTime);
-        gl.uniform2fv(this.uniforms.resolution, [this.canvas.width, this.canvas.height]);
-
-        gl.uniform3fv(this.uniforms.color1, this.hexToRgb(this.settings.color1));
-        gl.uniform3fv(this.uniforms.color2, this.hexToRgb(this.settings.color2));
-
-        gl.uniform1f(this.uniforms.speed, this.settings.speed);
-        gl.uniform1f(this.uniforms.origin, this.settings.origin);
-        gl.uniform1f(this.uniforms.direction, this.settings.direction);
-        gl.uniform1f(this.uniforms.scale, this.settings.scale);
-        gl.uniform1f(this.uniforms.brightness, this.settings.brightness);
-        gl.uniform1f(this.uniforms.opacity, this.settings.opacity);
-        gl.uniform1f(this.uniforms.detail, this.settings.detail);
-        gl.uniform1f(this.uniforms.turbulence, this.settings.turbulence);
-        gl.uniform1f(this.uniforms.fade, this.settings.fade);
-        gl.uniform1f(this.uniforms.height, this.settings.height);
+        if (this.settingsDirty) {
+          this.settingsDirty = false;
+          gl.uniform3fv(this.uniforms.color1, this.color1RGB);
+          gl.uniform3fv(this.uniforms.color2, this.color2RGB);
+          gl.uniform1f(this.uniforms.speed, this.settings.speed);
+          gl.uniform1f(this.uniforms.origin, this.settings.origin);
+          gl.uniform1f(this.uniforms.direction, this.settings.direction);
+          gl.uniform1f(this.uniforms.scale, this.settings.scale);
+          gl.uniform1f(this.uniforms.brightness, this.settings.brightness);
+          gl.uniform1f(this.uniforms.opacity, this.settings.opacity);
+          gl.uniform1f(this.uniforms.detail, this.settings.detail);
+          gl.uniform1f(this.uniforms.turbulence, this.settings.turbulence);
+          gl.uniform1f(this.uniforms.fade, this.settings.fade);
+          gl.uniform1f(this.uniforms.height, this.settings.height);
+        }
 
         gl.drawArrays(gl.TRIANGLES, 0, 6);
 
