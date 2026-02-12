@@ -1,10 +1,12 @@
 {
   "name": "Smoke Effect",
-  "version": "6.0.2",
+  "version": "7.0.0",
   "sdkVersion": "2.17.1",
   "description": "Mesmerizing animated smoke effect with customizable colors and fluid dynamics. Premium WebGL shader with Fractal Brownian Motion.",
   "author": "MyWallpaper Community",
   "type": "widget",
+  "renderMode": "native",
+  "entry": "index.js",
   "categories": ["effects", "animations", "backgrounds"],
   "license": "MIT",
   "repository": "https://github.com/rayandu924/mywallpaper-smoke-effect",
