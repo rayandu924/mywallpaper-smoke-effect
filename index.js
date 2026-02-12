@@ -1,7 +1,21 @@
-import { jsx as H } from "react/jsx-runtime";
-import { useSettings as V, useViewport as W, useSettingsActions as O } from "@mywallpaper/sdk-react";
-import { useRef as E, useMemo as $, useCallback as Y, useEffect as D } from "react";
-const j = `#version 300 es
+import { jsx as V } from "react/jsx-runtime";
+import { useSettings as W, useViewport as O, useSettingsActions as $ } from "@mywallpaper/sdk-react";
+import { useRef as x, useMemo as Y, useCallback as j, useEffect as I } from "react";
+const K = {
+  color1: "#FF6B35",
+  color2: "#FF0000",
+  speed: 0.28,
+  origin: 0,
+  direction: 0,
+  scale: 6,
+  brightness: 1,
+  opacity: 1,
+  detail: 1.25,
+  turbulence: 2,
+  density: 0.5,
+  height: 0.6,
+  quality: 1
+}, J = `#version 300 es
 precision mediump float;
 const vec2 positions[6] = vec2[6](
   vec2(-1.0, -1.0), vec2(1.0, -1.0), vec2(-1.0, 1.0),
@@ -12,7 +26,7 @@ void main() {
   uv = positions[gl_VertexID];
   gl_Position = vec4(positions[gl_VertexID], 0.0, 1.0);
 }
-`, K = `#version 300 es
+`, Q = `#version 300 es
 precision highp float;
 
 uniform float u_time;
@@ -112,56 +126,56 @@ void main() {
   fragColor = vec4(smokeColor, smokeAlpha * u_opacity);
 }
 `;
-function I(a) {
-  const l = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})?$/i.exec(a);
-  return l ? [
-    parseInt(l[1], 16) / 255,
-    parseInt(l[2], 16) / 255,
-    parseInt(l[3], 16) / 255
+function P(s) {
+  const c = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})?$/i.exec(s);
+  return c ? [
+    parseInt(c[1], 16) / 255,
+    parseInt(c[2], 16) / 255,
+    parseInt(c[3], 16) / 255
   ] : [1, 1, 1];
 }
-function P(a, l, f) {
-  l /= 100, f /= 100;
-  const n = l * Math.min(f, 1 - f), d = (m) => {
-    const r = (m + a / 30) % 12, i = f - n * Math.max(Math.min(r - 3, 9 - r, 1), -1);
+function k(s, c, f) {
+  c /= 100, f /= 100;
+  const n = c * Math.min(f, 1 - f), m = (_) => {
+    const t = (_ + s / 30) % 12, i = f - n * Math.max(Math.min(t - 3, 9 - t, 1), -1);
     return Math.round(255 * i).toString(16).padStart(2, "0");
   };
-  return `#${d(0)}${d(8)}${d(4)}`;
+  return `#${m(0)}${m(8)}${m(4)}`;
 }
-function J() {
+function Z() {
   const f = new Uint8Array(65536), n = new Float32Array(256 * 2);
-  for (let r = 0; r < 256; r++) {
+  for (let t = 0; t < 256; t++) {
     const i = Math.random() * Math.PI * 2;
-    n[r * 2] = Math.cos(i), n[r * 2 + 1] = Math.sin(i);
+    n[t * 2] = Math.cos(i), n[t * 2 + 1] = Math.sin(i);
   }
-  const d = (r) => r * r * r * (r * (r * 6 - 15) + 10), m = (r, i, _, g) => {
-    const u = ((i % 16 + 16) % 16 * 16 + (r % 16 + 16) % 16) * 2;
-    return n[u] * _ + n[u + 1] * g;
+  const m = (t) => t * t * t * (t * (t * 6 - 15) + 10), _ = (t, i, d, h) => {
+    const l = ((i % 16 + 16) % 16 * 16 + (t % 16 + 16) % 16) * 2;
+    return n[l] * d + n[l + 1] * h;
   };
-  for (let r = 0; r < 256; r++)
+  for (let t = 0; t < 256; t++)
     for (let i = 0; i < 256; i++) {
-      const _ = i / 256 * 16, g = r / 256 * 16, u = Math.floor(_), p = Math.floor(g), v = _ - u, T = g - p, U = d(v), R = d(T), e = m(u, p, v, T), x = m(u + 1, p, v - 1, T), y = m(u, p + 1, v, T - 1), S = m(u + 1, p + 1, v - 1, T - 1), o = e + U * (x - e), b = y + U * (S - y), t = o + R * (b - o);
-      f[r * 256 + i] = Math.max(0, Math.min(255, (t / 1.414 + 0.5) * 255 | 0));
+      const d = i / 256 * 16, h = t / 256 * 16, l = Math.floor(d), g = Math.floor(h), v = d - l, T = h - g, b = m(v), U = m(T), E = _(l, g, v, T), e = _(l + 1, g, v - 1, T), R = _(l, g + 1, v, T - 1), S = _(l + 1, g + 1, v - 1, T - 1), y = E + b * (e - E), o = R + b * (S - R), A = y + U * (o - y);
+      f[t * 256 + i] = Math.max(0, Math.min(255, (A / 1.414 + 0.5) * 255 | 0));
     }
   return f;
 }
-function k(a, l, f) {
-  const n = a.createShader(f);
-  return n ? (a.shaderSource(n, l), a.compileShader(n), a.getShaderParameter(n, a.COMPILE_STATUS) ? n : (console.error("Shader compile error:", a.getShaderInfoLog(n)), a.deleteShader(n), null)) : null;
+function w(s, c, f) {
+  const n = s.createShader(f);
+  return n ? (s.shaderSource(n, c), s.compileShader(n), s.getShaderParameter(n, s.COMPILE_STATUS) ? n : (console.error("Shader compile error:", s.getShaderInfoLog(n)), s.deleteShader(n), null)) : null;
 }
-function oe() {
-  const a = V(), { width: l, height: f } = W(), { setValue: n, onButtonClick: d } = O(), m = E(null), r = E(null), i = E(null), _ = E(null), g = E({}), u = E(0), p = E(performance.now()), v = E(a);
-  v.current = a;
-  const T = $(() => J(), []), U = Y(() => {
-    const R = Math.random() * 360, e = P(R, 70 + Math.random() * 30, 20 + Math.random() * 20), x = P((R + 30 + Math.random() * 60) % 360, 60 + Math.random() * 40, 35 + Math.random() * 25);
-    n("color1", e), n("color2", x);
-  }, [n]);
-  return D(() => {
-    d("randomizeColorsBtn", U);
-  }, [d, U]), D(() => {
-    const R = m.current;
-    if (!R) return;
-    const e = R.getContext("webgl2", {
+function re() {
+  const s = W(), c = { ...K, ...s }, { width: f, height: n } = O(), { setValue: m, onButtonClick: _ } = $(), t = x(null), i = x(null), d = x(null), h = x(null), l = x({}), g = x(0), v = x(performance.now()), T = x(c);
+  T.current = c;
+  const b = Y(() => Z(), []), U = j(() => {
+    const E = Math.random() * 360, e = k(E, 70 + Math.random() * 30, 20 + Math.random() * 20), R = k((E + 30 + Math.random() * 60) % 360, 60 + Math.random() * 40, 35 + Math.random() * 25);
+    m("color1", e), m("color2", R);
+  }, [m]);
+  return I(() => {
+    _("randomizeColorsBtn", U);
+  }, [_, U]), I(() => {
+    const E = t.current;
+    if (!E) return;
+    const e = E.getContext("webgl2", {
       alpha: !0,
       premultipliedAlpha: !1,
       antialias: !1
@@ -170,17 +184,17 @@ function oe() {
       console.error("WebGL2 not supported");
       return;
     }
-    r.current = e, e.enable(e.BLEND), e.blendFunc(e.SRC_ALPHA, e.ONE_MINUS_SRC_ALPHA), e.clearColor(0, 0, 0, 0);
-    const x = e.createTexture();
-    _.current = x, e.bindTexture(e.TEXTURE_2D, x), e.texImage2D(e.TEXTURE_2D, 0, e.R8, 256, 256, 0, e.RED, e.UNSIGNED_BYTE, T), e.texParameteri(e.TEXTURE_2D, e.TEXTURE_WRAP_S, e.REPEAT), e.texParameteri(e.TEXTURE_2D, e.TEXTURE_WRAP_T, e.REPEAT), e.texParameteri(e.TEXTURE_2D, e.TEXTURE_MIN_FILTER, e.LINEAR), e.texParameteri(e.TEXTURE_2D, e.TEXTURE_MAG_FILTER, e.LINEAR);
-    const y = k(e, j, e.VERTEX_SHADER), S = k(e, K, e.FRAGMENT_SHADER);
-    if (!y || !S) return;
+    i.current = e, e.enable(e.BLEND), e.blendFunc(e.SRC_ALPHA, e.ONE_MINUS_SRC_ALPHA), e.clearColor(0, 0, 0, 0);
+    const R = e.createTexture();
+    h.current = R, e.bindTexture(e.TEXTURE_2D, R), e.texImage2D(e.TEXTURE_2D, 0, e.R8, 256, 256, 0, e.RED, e.UNSIGNED_BYTE, b), e.texParameteri(e.TEXTURE_2D, e.TEXTURE_WRAP_S, e.REPEAT), e.texParameteri(e.TEXTURE_2D, e.TEXTURE_WRAP_T, e.REPEAT), e.texParameteri(e.TEXTURE_2D, e.TEXTURE_MIN_FILTER, e.LINEAR), e.texParameteri(e.TEXTURE_2D, e.TEXTURE_MAG_FILTER, e.LINEAR);
+    const S = w(e, J, e.VERTEX_SHADER), y = w(e, Q, e.FRAGMENT_SHADER);
+    if (!S || !y) return;
     const o = e.createProgram();
-    if (e.attachShader(o, y), e.attachShader(o, S), e.linkProgram(o), !e.getProgramParameter(o, e.LINK_STATUS)) {
+    if (e.attachShader(o, S), e.attachShader(o, y), e.linkProgram(o), !e.getProgramParameter(o, e.LINK_STATUS)) {
       console.error("Program link failed:", e.getProgramInfoLog(o));
       return;
     }
-    e.detachShader(o, y), e.deleteShader(y), e.detachShader(o, S), e.deleteShader(S), i.current = o, e.useProgram(o), g.current = {
+    e.detachShader(o, S), e.deleteShader(S), e.detachShader(o, y), e.deleteShader(y), d.current = o, e.useProgram(o), l.current = {
       u_time: e.getUniformLocation(o, "u_time"),
       u_resolution: e.getUniformLocation(o, "u_resolution"),
       u_color1: e.getUniformLocation(o, "u_color1"),
@@ -197,28 +211,28 @@ function oe() {
       u_height: e.getUniformLocation(o, "u_height"),
       u_quality: e.getUniformLocation(o, "u_quality"),
       u_noiseTexture: e.getUniformLocation(o, "u_noiseTexture")
-    }, e.uniform1i(g.current.u_noiseTexture, 0), e.activeTexture(e.TEXTURE0), e.bindTexture(e.TEXTURE_2D, x), p.current = performance.now();
-    const b = () => {
-      const t = r.current, w = i.current;
-      if (!t || !w) return;
-      const c = v.current, h = m.current;
-      if (!h) return;
-      const C = c.quality ?? 1, M = (window.devicePixelRatio || 1) * C, A = h.clientWidth * M, L = h.clientHeight * M;
-      (h.width !== A || h.height !== L) && (h.width = A, h.height = L, t.viewport(0, 0, A, L)), t.clear(t.COLOR_BUFFER_BIT);
-      const s = g.current, N = (performance.now() - p.current) / 1e3;
-      t.uniform1f(s.u_time, N), t.uniform2f(s.u_resolution, h.width, h.height);
-      const [X, q, z] = I(c.color1), [F, B, G] = I(c.color2);
-      t.uniform3f(s.u_color1, X, q, z), t.uniform3f(s.u_color2, F, B, G), t.uniform1f(s.u_speed, c.speed), t.uniform1f(s.u_origin, c.origin), t.uniform1f(s.u_direction, c.direction), t.uniform1f(s.u_scale, c.scale), t.uniform1f(s.u_brightness, c.brightness), t.uniform1f(s.u_opacity, c.opacity), t.uniform1f(s.u_detail, c.detail), t.uniform1f(s.u_turbulence, c.turbulence), t.uniform1f(s.u_density, c.density), t.uniform1f(s.u_height, c.height), t.uniform1f(s.u_quality, C), t.drawArrays(t.TRIANGLES, 0, 6), u.current = requestAnimationFrame(b);
+    }, e.uniform1i(l.current.u_noiseTexture, 0), e.activeTexture(e.TEXTURE0), e.bindTexture(e.TEXTURE_2D, R), v.current = performance.now();
+    const A = () => {
+      const r = i.current, F = d.current;
+      if (!r || !F) return;
+      const u = T.current, p = t.current;
+      if (!p) return;
+      const D = u.quality ?? 1, M = (window.devicePixelRatio || 1) * D, L = p.clientWidth * M, C = p.clientHeight * M;
+      (p.width !== L || p.height !== C) && (p.width = L, p.height = C, r.viewport(0, 0, L, C)), r.clear(r.COLOR_BUFFER_BIT);
+      const a = l.current, N = (performance.now() - v.current) / 1e3;
+      r.uniform1f(a.u_time, N), r.uniform2f(a.u_resolution, p.width, p.height);
+      const [X, q, z] = P(u.color1), [B, G, H] = P(u.color2);
+      r.uniform3f(a.u_color1, X, q, z), r.uniform3f(a.u_color2, B, G, H), r.uniform1f(a.u_speed, u.speed), r.uniform1f(a.u_origin, u.origin), r.uniform1f(a.u_direction, u.direction), r.uniform1f(a.u_scale, u.scale), r.uniform1f(a.u_brightness, u.brightness), r.uniform1f(a.u_opacity, u.opacity), r.uniform1f(a.u_detail, u.detail), r.uniform1f(a.u_turbulence, u.turbulence), r.uniform1f(a.u_density, u.density), r.uniform1f(a.u_height, u.height), r.uniform1f(a.u_quality, D), r.drawArrays(r.TRIANGLES, 0, 6), g.current = requestAnimationFrame(A);
     };
-    return u.current = requestAnimationFrame(b), () => {
-      cancelAnimationFrame(u.current), i.current && (e.deleteProgram(i.current), i.current = null), _.current && (e.deleteTexture(_.current), _.current = null);
-      const t = e.getExtension("WEBGL_lose_context");
-      t && t.loseContext(), r.current = null;
+    return g.current = requestAnimationFrame(A), () => {
+      cancelAnimationFrame(g.current), d.current && (e.deleteProgram(d.current), d.current = null), h.current && (e.deleteTexture(h.current), h.current = null);
+      const r = e.getExtension("WEBGL_lose_context");
+      r && r.loseContext(), i.current = null;
     };
-  }, [T]), /* @__PURE__ */ H(
+  }, [b]), /* @__PURE__ */ V(
     "canvas",
     {
-      ref: m,
+      ref: t,
       style: {
         display: "block",
         width: "100%",
@@ -228,5 +242,5 @@ function oe() {
   );
 }
 export {
-  oe as default
+  re as default
 };

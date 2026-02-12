@@ -17,6 +17,22 @@ interface Settings {
   quality: number
 }
 
+const DEFAULTS: Settings = {
+  color1: '#FF6B35',
+  color2: '#FF0000',
+  speed: 0.28,
+  origin: 0,
+  direction: 0,
+  scale: 6.0,
+  brightness: 1.0,
+  opacity: 1.0,
+  detail: 1.25,
+  turbulence: 2.0,
+  density: 0.5,
+  height: 0.6,
+  quality: 1.0,
+}
+
 const VERTEX_SHADER = `#version 300 es
 precision mediump float;
 const vec2 positions[6] = vec2[6](
@@ -217,7 +233,8 @@ function compileShader(gl: WebGL2RenderingContext, source: string, type: number)
 }
 
 export default function SmokeEffect() {
-  const settings = useSettings<Settings>()
+  const raw = useSettings<Partial<Settings>>()
+  const settings: Settings = { ...DEFAULTS, ...raw }
   const { width, height } = useViewport()
   const { setValue, onButtonClick } = useSettingsActions()
   const canvasRef = useRef<HTMLCanvasElement>(null)
