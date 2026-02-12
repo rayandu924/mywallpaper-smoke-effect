@@ -2,13 +2,14 @@ import { defineConfig, type Plugin } from 'vite'
 import { copyFileSync, mkdirSync } from 'fs'
 import { resolve } from 'path'
 
-/** Copy manifest.json to dist/ after build */
-function copyManifest(): Plugin {
+/** Copy built index.js to repo root (for jsdelivr CDN) and manifest to dist/ */
+function postBuild(): Plugin {
   return {
-    name: 'copy-manifest',
+    name: 'post-build',
     closeBundle() {
       mkdirSync('dist', { recursive: true })
       copyFileSync('manifest.json', 'dist/manifest.json')
+      copyFileSync('dist/index.js', 'index.js')
     },
   }
 }
@@ -27,5 +28,5 @@ export default defineConfig({
   esbuild: {
     jsx: 'automatic',
   },
-  plugins: [copyManifest()],
+  plugins: [postBuild()],
 })
