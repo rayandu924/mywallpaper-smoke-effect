@@ -168,6 +168,10 @@
             if (qualityChanged) this.resize();
           });
 
+          api.onButtonClick('randomizeColorBtn', () => {
+            this.randomizeColor();
+          });
+
           api.onEvent('viewport:resize', () => this.resize());
           api.onPause(() => this.stop());
           api.onResume(() => this.start());
@@ -178,6 +182,31 @@
             subscribedEvents: ['viewport:resize']
           });
         }
+      }
+
+      randomizeColor() {
+        const hue = Math.random() * 360;
+        const s = 70 + Math.random() * 30;
+        const l = 40 + Math.random() * 30;
+        const color = this.hslToHex(hue, s, l);
+
+        if (window.MyWallpaper?.settings) {
+          window.MyWallpaper.settings.setValues({ color });
+        }
+        this.settings.color = color;
+        this.cacheColors();
+        this.settingsDirty = true;
+      }
+
+      hslToHex(h, s, l) {
+        s /= 100; l /= 100;
+        const a = s * Math.min(l, 1 - l);
+        const f = n => {
+          const k = (n + h / 30) % 12;
+          const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+          return Math.round(255 * color).toString(16).padStart(2, '0');
+        };
+        return `#${f(0)}${f(8)}${f(4)}`;
       }
 
       createShaderProgram() {

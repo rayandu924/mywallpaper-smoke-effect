@@ -1,5 +1,5 @@
-import { useSettings, useViewport } from '@mywallpaper/sdk-react'
-import { useRef, useEffect, useMemo } from 'react'
+import { useSettings, useViewport, useSettingsActions } from '@mywallpaper/sdk-react'
+import { useRef, useEffect, useMemo, useCallback } from 'react'
 
 interface Settings {
   color: string
@@ -156,6 +156,17 @@ function hexToRgb(hex: string): [number, number, number] {
   return [1, 1, 1]
 }
 
+function hslToHex(h: number, s: number, l: number): string {
+  s /= 100
+  l /= 100
+  const a = s * Math.min(l, 1 - l)
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1)
+    return Math.round(255 * color).toString(16).padStart(2, '0')
+  }
+  return `#${f(0)}${f(8)}${f(4)}`
+}
 
 function generateNoiseData(): Uint8Array {
   const size = 256
@@ -222,6 +233,7 @@ export default function SmokeEffect() {
   const raw = useSettings<Partial<Settings>>()
   const settings: Settings = { ...DEFAULTS, ...raw }
   const { width, height } = useViewport()
+  const { setValue, onButtonClick } = useSettingsActions()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const glRef = useRef<WebGL2RenderingContext | null>(null)
   const programRef = useRef<WebGLProgram | null>(null)
@@ -234,6 +246,15 @@ export default function SmokeEffect() {
   settingsRef.current = settings
 
   const noiseData = useMemo(() => generateNoiseData(), [])
+
+  const randomizeColor = useCallback(() => {
+    const hue = Math.random() * 360
+    setValue('color', hslToHex(hue, 70 + Math.random() * 30, 40 + Math.random() * 30))
+  }, [setValue])
+
+  useEffect(() => {
+    onButtonClick('randomizeColorBtn', randomizeColor)
+  }, [onButtonClick, randomizeColor])
 
   useEffect(() => {
     const canvas = canvasRef.current
