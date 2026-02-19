@@ -27,7 +27,7 @@ const DEFAULTS: Settings = {
   detail: 1.25,
   turbulence: 2.0,
   density: 0.5,
-  height: 1.0,
+  height: 0.7,
   quality: 1.0,
 }
 

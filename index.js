@@ -12,7 +12,7 @@ const W = {
   detail: 1.25,
   turbulence: 2,
   density: 0.5,
-  height: 1,
+  height: 0.7,
   quality: 1
 }, O = `#version 300 es
 precision mediump float;
