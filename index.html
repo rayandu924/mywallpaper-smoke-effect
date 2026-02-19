@@ -25,8 +25,7 @@
         const config = window.MyWallpaper?.config || {};
 
         this.settings = {
-          color1: config.color1 ?? '#FF6B35',
-          color2: config.color2 ?? '#FF0000',
+          color: config.color ?? '#FFFFFF',
           speed: config.speed ?? 0.28,
           origin: config.origin ?? 0,
           direction: config.direction ?? 0,
@@ -36,13 +35,12 @@
           detail: config.detail ?? 1.25,
           turbulence: config.turbulence ?? 2.0,
           density: config.density ?? 0.5,
-          height: config.height ?? 0.6,
+          height: config.height ?? 1.0,
           quality: config.quality ?? 1.0
         };
 
         // Pre-allocated typed arrays (avoid per-frame GC)
-        this.color1RGB = new Float32Array(3);
-        this.color2RGB = new Float32Array(3);
+        this.colorRGB = new Float32Array(3);
         this.resolutionArray = new Float32Array(2);
         this.settingsDirty = true;
 
@@ -170,10 +168,6 @@
             if (qualityChanged) this.resize();
           });
 
-          api.onButtonClick('randomizeColorsBtn', () => {
-            this.randomizeColors();
-          });
-
           api.onEvent('viewport:resize', () => this.resize());
           api.onPause(() => this.stop());
           api.onResume(() => this.start());
@@ -184,32 +178,6 @@
             subscribedEvents: ['viewport:resize']
           });
         }
-      }
-
-      randomizeColors() {
-        const baseHue = Math.random() * 360;
-        const colors = {
-          color1: this.hslToHex(baseHue, 70 + Math.random() * 30, 20 + Math.random() * 20),
-          color2: this.hslToHex((baseHue + 30 + Math.random() * 60) % 360, 60 + Math.random() * 40, 35 + Math.random() * 25)
-        };
-
-        if (window.MyWallpaper?.settings) {
-          window.MyWallpaper.settings.setValues(colors);
-        }
-        Object.assign(this.settings, colors);
-        this.cacheColors();
-        this.settingsDirty = true;
-      }
-
-      hslToHex(h, s, l) {
-        s /= 100; l /= 100;
-        const a = s * Math.min(l, 1 - l);
-        const f = n => {
-          const k = (n + h / 30) % 12;
-          const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
-          return Math.round(255 * color).toString(16).padStart(2, '0');
-        };
-        return `#${f(0)}${f(8)}${f(4)}`;
       }
 
       createShaderProgram() {
@@ -233,8 +201,7 @@
 
           uniform float time;
           uniform vec2 resolution;
-          uniform vec3 color1;
-          uniform vec3 color2;
+          uniform vec3 color;
           uniform float speed;
           uniform float origin;
           uniform float direction;
@@ -329,7 +296,7 @@
             float smokeIntensity = fbm(vec2(noise2, baseNoise), max(octaves / 2, 2));
 
             // Color brightness
-            vec3 smokeColor = mix(color2, color1, smokeIntensity) * brightness;
+            vec3 smokeColor = color * brightness;
 
             // Alpha: height controls how far smoke extends
             float smokeAlpha = smoothstep(0.0, 0.8, (smokeIntensity - gradient + 0.3) * height);
@@ -372,8 +339,7 @@
         this.uniforms = {
           time: gl.getUniformLocation(this.program, 'time'),
           resolution: gl.getUniformLocation(this.program, 'resolution'),
-          color1: gl.getUniformLocation(this.program, 'color1'),
-          color2: gl.getUniformLocation(this.program, 'color2'),
+          color: gl.getUniformLocation(this.program, 'color'),
           speed: gl.getUniformLocation(this.program, 'speed'),
           origin: gl.getUniformLocation(this.program, 'origin'),
           direction: gl.getUniformLocation(this.program, 'direction'),
@@ -418,8 +384,7 @@
       }
 
       cacheColors() {
-        this.hexToRgb(this.settings.color1, this.color1RGB);
-        this.hexToRgb(this.settings.color2, this.color2RGB);
+        this.hexToRgb(this.settings.color, this.colorRGB);
       }
 
       render = () => {
@@ -437,8 +402,7 @@
 
         if (this.settingsDirty) {
           this.settingsDirty = false;
-          gl.uniform3fv(this.uniforms.color1, this.color1RGB);
-          gl.uniform3fv(this.uniforms.color2, this.color2RGB);
+          gl.uniform3fv(this.uniforms.color, this.colorRGB);
           gl.uniform1f(this.uniforms.speed, this.settings.speed);
           gl.uniform1f(this.uniforms.origin, this.settings.origin);
           gl.uniform1f(this.uniforms.direction, this.settings.direction);

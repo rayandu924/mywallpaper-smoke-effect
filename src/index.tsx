@@ -1,9 +1,8 @@
-import { useSettings, useViewport, useSettingsActions } from '@mywallpaper/sdk-react'
-import { useRef, useEffect, useMemo, useCallback } from 'react'
+import { useSettings, useViewport } from '@mywallpaper/sdk-react'
+import { useRef, useEffect, useMemo } from 'react'
 
 interface Settings {
-  color1: string
-  color2: string
+  color: string
   speed: number
   origin: number
   direction: number
@@ -18,8 +17,7 @@ interface Settings {
 }
 
 const DEFAULTS: Settings = {
-  color1: '#FF6B35',
-  color2: '#FF0000',
+  color: '#FFFFFF',
   speed: 0.28,
   origin: 0,
   direction: 0,
@@ -29,7 +27,7 @@ const DEFAULTS: Settings = {
   detail: 1.25,
   turbulence: 2.0,
   density: 0.5,
-  height: 0.6,
+  height: 1.0,
   quality: 1.0,
 }
 
@@ -51,8 +49,7 @@ precision highp float;
 
 uniform float u_time;
 uniform vec2 u_resolution;
-uniform vec3 u_color1;
-uniform vec3 u_color2;
+uniform vec3 u_color;
 uniform float u_speed;
 uniform float u_origin;
 uniform float u_direction;
@@ -133,7 +130,7 @@ void main() {
 
   float smokeIntensity = fbm(vec2(noise2, baseNoise), max(octaves / 2, 2));
 
-  vec3 smokeColor = mix(u_color2, u_color1, smokeIntensity) * u_brightness;
+  vec3 smokeColor = u_color * u_brightness;
 
   float smokeAlpha = smoothstep(0.0, 0.8, (smokeIntensity - gradient + 0.3) * u_height);
 
@@ -159,17 +156,6 @@ function hexToRgb(hex: string): [number, number, number] {
   return [1, 1, 1]
 }
 
-function hslToHex(h: number, s: number, l: number): string {
-  s /= 100
-  l /= 100
-  const a = s * Math.min(l, 1 - l)
-  const f = (n: number) => {
-    const k = (n + h / 30) % 12
-    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1)
-    return Math.round(255 * color).toString(16).padStart(2, '0')
-  }
-  return `#${f(0)}${f(8)}${f(4)}`
-}
 
 function generateNoiseData(): Uint8Array {
   const size = 256
@@ -236,7 +222,6 @@ export default function SmokeEffect() {
   const raw = useSettings<Partial<Settings>>()
   const settings: Settings = { ...DEFAULTS, ...raw }
   const { width, height } = useViewport()
-  const { setValue, onButtonClick } = useSettingsActions()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const glRef = useRef<WebGL2RenderingContext | null>(null)
   const programRef = useRef<WebGLProgram | null>(null)
@@ -249,18 +234,6 @@ export default function SmokeEffect() {
   settingsRef.current = settings
 
   const noiseData = useMemo(() => generateNoiseData(), [])
-
-  const randomizeColors = useCallback(() => {
-    const baseHue = Math.random() * 360
-    const newColor1 = hslToHex(baseHue, 70 + Math.random() * 30, 20 + Math.random() * 20)
-    const newColor2 = hslToHex((baseHue + 30 + Math.random() * 60) % 360, 60 + Math.random() * 40, 35 + Math.random() * 25)
-    setValue('color1', newColor1)
-    setValue('color2', newColor2)
-  }, [setValue])
-
-  useEffect(() => {
-    onButtonClick('randomizeColorsBtn', randomizeColors)
-  }, [onButtonClick, randomizeColors])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -320,8 +293,7 @@ export default function SmokeEffect() {
     uniformsRef.current = {
       u_time: gl.getUniformLocation(program, 'u_time'),
       u_resolution: gl.getUniformLocation(program, 'u_resolution'),
-      u_color1: gl.getUniformLocation(program, 'u_color1'),
-      u_color2: gl.getUniformLocation(program, 'u_color2'),
+      u_color: gl.getUniformLocation(program, 'u_color'),
       u_speed: gl.getUniformLocation(program, 'u_speed'),
       u_origin: gl.getUniformLocation(program, 'u_origin'),
       u_direction: gl.getUniformLocation(program, 'u_direction'),
@@ -371,10 +343,8 @@ export default function SmokeEffect() {
       currentGl.uniform1f(u.u_time, time)
       currentGl.uniform2f(u.u_resolution, canvas.width, canvas.height)
 
-      const [r1, g1, b1] = hexToRgb(s.color1)
-      const [r2, g2, b2] = hexToRgb(s.color2)
-      currentGl.uniform3f(u.u_color1, r1, g1, b1)
-      currentGl.uniform3f(u.u_color2, r2, g2, b2)
+      const [r, g, b] = hexToRgb(s.color)
+      currentGl.uniform3f(u.u_color, r, g, b)
       currentGl.uniform1f(u.u_speed, s.speed)
       currentGl.uniform1f(u.u_origin, s.origin)
       currentGl.uniform1f(u.u_direction, s.direction)
